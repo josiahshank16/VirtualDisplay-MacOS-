@@ -8,30 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		BFBCA751308E931200908B3F /* VirtualDisplayKit in Frameworks */ = {isa = PBXBuildFile; productRef = BFBCA750308E931200908B3F /* VirtualDisplayKit */; };
-		BFBCA760308E948900908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = BFBCA756308E948800908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BFDAD9DD309193A800FA9F25 /* Syphon in Frameworks */ = {isa = PBXBuildFile; productRef = BFDAD9DC309193A800FA9F25 /* Syphon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		BFBCA75E308E948900908B3F /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 000000000000000000000000 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BFBCA755308E948800908B3F;
-			remoteInfo = VirtualDisplayCameraExtension;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		BFBCA765308E948900908B3F /* Embed System Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
-			dstSubfolder = Product;
-			files = (
-				BFBCA760308E948900908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension in Embed System Extensions */,
-			);
-			name = "Embed System Extensions";
-		};
 		BFBCA76E308EA0C300908B3F /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
@@ -44,31 +27,15 @@
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* VirtualDisplayCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VirtualDisplayCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BFBCA756308E948800908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BFBCA761308E948900908B3F /* Exceptions for "VirtualDisplayCameraExtension" folder in "VirtualDisplayCameraExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = BFBCA755308E948800908B3F /* VirtualDisplayCameraExtension */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* VirtualDisplayCamera */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = VirtualDisplayCamera;
-			sourceTree = "<group>";
-		};
-		BFBCA757308E948800908B3F /* VirtualDisplayCameraExtension */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				BFBCA761308E948900908B3F /* Exceptions for "VirtualDisplayCameraExtension" folder in "VirtualDisplayCameraExtension" target */,
-			);
-			path = VirtualDisplayCameraExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -81,11 +48,6 @@
 				BFDAD9DD309193A800FA9F25 /* Syphon in Frameworks */,
 			);
 		};
-		BFBCA753308E948800908B3F /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			files = (
-			);
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -93,7 +55,6 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* VirtualDisplayCamera */,
-				BFBCA757308E948800908B3F /* VirtualDisplayCameraExtension */,
 				BFBCA766308E9E8D00908B3F /* Frameworks */,
 				000000000000000000000020 /* Products */,
 			);
@@ -103,7 +64,6 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* VirtualDisplayCamera.app */,
-				BFBCA756308E948800908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -125,13 +85,11 @@
 				000000000000000120000000 /* Sources */,
 				000000000000000130000000 /* Frameworks */,
 				000000000000000140000000 /* Resources */,
-				BFBCA765308E948900908B3F /* Embed System Extensions */,
 				BFBCA76E308EA0C300908B3F /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				BFBCA75F308E948900908B3F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* VirtualDisplayCamera */,
@@ -145,24 +103,6 @@
 			productReference = 000000000000000000000120 /* VirtualDisplayCamera.app */;
 			productType = "com.apple.product-type.application";
 		};
-		BFBCA755308E948800908B3F /* VirtualDisplayCameraExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = BFBCA762308E948900908B3F /* Build configuration list for PBXNativeTarget "VirtualDisplayCameraExtension" */;
-			buildPhases = (
-				BFBCA752308E948800908B3F /* Sources */,
-				BFBCA753308E948800908B3F /* Frameworks */,
-				BFBCA754308E948800908B3F /* Resources */,
-			);
-			buildRules = (
-			);
-			fileSystemSynchronizedGroups = (
-				BFBCA757308E948800908B3F /* VirtualDisplayCameraExtension */,
-			);
-			name = VirtualDisplayCameraExtension;
-			productName = VirtualDisplayCameraExtension;
-			productReference = BFBCA756308E948800908B3F /* com.josiahshankpersonalteam.VirtualDisplayCameraExtension.systemextension */;
-			productType = "com.apple.product-type.system-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -175,9 +115,6 @@
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
-					};
-					BFBCA755308E948800908B3F = {
-						CreatedOnToolsVersion = 27.1;
 					};
 				};
 			};
@@ -200,18 +137,12 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* VirtualDisplayCamera */,
-				BFBCA755308E948800908B3F /* VirtualDisplayCameraExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			files = (
-			);
-		};
-		BFBCA754308E948800908B3F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -224,19 +155,9 @@
 			files = (
 			);
 		};
-		BFBCA752308E948800908B3F /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			files = (
-			);
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		BFBCA75F308E948900908B3F /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = BFBCA755308E948800908B3F /* VirtualDisplayCameraExtension */;
-			targetProxy = BFBCA75E308E948900908B3F /* PBXContainerItemProxy */;
-		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
@@ -296,7 +217,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.7.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -360,7 +281,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.7.1;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PROJECT_UNIQUE_VALUE = ZBMQ0SXN;
@@ -454,74 +375,6 @@
 			};
 			name = Release;
 		};
-		BFBCA763308E948900908B3F /* Debug configuration for PBXNativeTarget "VirtualDisplayCameraExtension" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = VirtualDisplayCameraExtension/VirtualDisplayCameraExtension.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V6UHJ4USD9;
-				ENABLE_APP_SANDBOX = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = VirtualDisplayCameraExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = VirtualDisplayCameraExtension;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSSystemExtensionUsageDescription = SYSTEM_EXTENSION_USAGE_DESCRIPTION;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.7;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.josiahshankpersonalteam.VirtualDisplayCameraExtension;
-				PRODUCT_NAME = "$(inherited)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		BFBCA764308E948900908B3F /* Release configuration for PBXNativeTarget "VirtualDisplayCameraExtension" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = VirtualDisplayCameraExtension/VirtualDisplayCameraExtension.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = V6UHJ4USD9;
-				ENABLE_APP_SANDBOX = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = VirtualDisplayCameraExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = VirtualDisplayCameraExtension;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSSystemExtensionUsageDescription = SYSTEM_EXTENSION_USAGE_DESCRIPTION;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.7;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.josiahshankpersonalteam.VirtualDisplayCameraExtension;
-				PRODUCT_NAME = "$(inherited)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -538,14 +391,6 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "VirtualDisplayCamera" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "VirtualDisplayCamera" */,
-			);
-			defaultConfigurationName = Release;
-		};
-		BFBCA762308E948900908B3F /* Build configuration list for PBXNativeTarget "VirtualDisplayCameraExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				BFBCA763308E948900908B3F /* Debug configuration for PBXNativeTarget "VirtualDisplayCameraExtension" */,
-				BFBCA764308E948900908B3F /* Release configuration for PBXNativeTarget "VirtualDisplayCameraExtension" */,
 			);
 			defaultConfigurationName = Release;
 		};
