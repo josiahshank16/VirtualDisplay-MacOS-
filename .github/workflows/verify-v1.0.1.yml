@@ -1,0 +1,33 @@
+name: Verify published v1.0.1 app
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/verify-v1.0.1.yml'
+      - 'scripts/verify-release.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Inspect release ZIP
+    runs-on: macos-latest
+    steps:
+      - name: Check out verification script
+        uses: actions/checkout@v4
+
+      - name: Download published app archive
+        run: |
+          curl --fail --location --retry 3 \
+            --output "$RUNNER_TEMP/VirtualDisplayCamera.zip" \
+            "https://github.com/josiahshank16/VirtualDisplay-MacOS-/releases/download/v1.0.1/VirtualDisplayCamera.zip"
+
+      - name: Verify GitHub-published SHA-256
+        run: |
+          echo "0c7d44009af3e7799d7721610d7d1f9bddc360193e7ffa891324b16040209bba  $RUNNER_TEMP/VirtualDisplayCamera.zip" | shasum -a 256 -c -
+
+      - name: Inspect bundle, macOS version, Syphon, icon and signature
+        run: |
+          bash scripts/verify-release.sh "$RUNNER_TEMP/VirtualDisplayCamera.zip"
