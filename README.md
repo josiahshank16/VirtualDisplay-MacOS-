@@ -4,7 +4,7 @@ A lightweight utility that adds a **virtual extended desktop** to macOS and publ
 
 **Downloads:** [Virtual Display Camera v1.0.1](../../releases/tag/v1.0.1) · **All versions:** [Releases](../../releases)
 
-[![macOS source build](https://github.com/josiahshank16/VirtualDisplay-MacOS-/actions/workflows/build-macos.yml/badge.svg)](../../actions/workflows/build-macos.yml)
+[![macOS source build](https://github.com/josiahshank16/VirtualDisplay-MacOS-/actions/workflows/build-macos.yml/badge.svg)](../../actions/workflows/build-macos.yml) [![v1.0.1 release audit](https://github.com/josiahshank16/VirtualDisplay-MacOS-/actions/workflows/verify-v1.0.1.yml/badge.svg)](../../actions/workflows/verify-v1.0.1.yml)
 
 > **Source status:** The Swift files, icon, Xcode project, and locked package resolutions are included. An **unsigned Apple Silicon Release build from a fresh GitHub checkout passed** on [pull request #1](../../pull/1), and automated builds now run for source changes. This checks compilation, not physical Mac installation, macOS permissions, or notarization.
 
@@ -34,9 +34,9 @@ A lightweight utility that adds a **virtual extended desktop** to macOS and publ
 ### Compatibility and limitations
 
 - **Architecture:** The packaged Syphon framework currently targets **Apple Silicon (arm64)**. Intel support has not been built.
-- **Minimum macOS:** The Xcode app target is set to **macOS 15.0**. *Do not confuse this source setting with the minimum version of a published binary.* The executable in the actual ZIP determines compatibility. An older build was confirmed to have `minos 15.6`; the present v1.0.1 binary still needs an independent `minos` check.
+- **Minimum macOS:** The published **v1.0.1 ZIP has been independently inspected** on a GitHub-hosted Mac: the included executable reports **`minos 15.0`** and **`arm64`** architecture. This meets the OS-version requirement for Sequoia 15.5 and newer. Functional compatibility on each macOS version still needs device testing.
 - **Private APIs:** VirtualDisplayKit uses undocumented macOS virtual-display interfaces; behavior may change with macOS updates.
-- **Signing:** GitHub distribution does not automatically notarize an app. Users may have to approve a locally signed or unnotarized build.
+- **Signing:** The published v1.0.1 ZIP passes local macOS **code-signature verification**. This does **not** demonstrate Apple notarization. Users may still have to approve installation in Privacy & Security.
 
 To inspect a downloaded ZIP on macOS, run the bundled [release verification script](scripts/verify-release.sh):
 
@@ -50,11 +50,11 @@ Or inspect the app executable directly:
 xcrun vtool -show-build "/path/to/VirtualDisplayCamera.app/Contents/MacOS/VirtualDisplayCamera"
 ```
 
-Look for `minos` (the supported minimum macOS version). The verification script also checks that the ZIP contains the app and an embedded Syphon framework; it does not replace an actual functional test.
+Look for `minos` (the supported minimum macOS version). The [published v1.0.1 audit](../../actions/workflows/verify-v1.0.1.yml) downloaded the actual release ZIP, verified its SHA-256, confirmed `minos 15.0`, found the embedded and linked Syphon framework, found `AppIcon` in the asset catalog, and verified its code signature. This is a packaging inspection, **not** a notarization check or live-display test.
 
 ## Build from source in Xcode
 
-1. Click **Code → Download ZIP** on this repository's main GitHub page and extract it, or clone the repository with Git.
+1. Click **Code → Download ZIP** from this repository's **main branch** and extract it, or clone the repository with Git. The older tagged `v1.0.1` source snapshot predates the cleanup of the unused extension; use main for the latest buildable source.
 2. Open `VirtualDisplayCamera.xcodeproj` in Xcode on an Apple Silicon Mac.
 3. Allow Xcode to resolve the two package dependencies. They are specified in the project and `Package.resolved`:
    - [VirtualDisplayKit](https://github.com/xocialize/VirtualDisplayKit)
