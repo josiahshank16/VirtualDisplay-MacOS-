@@ -1,0 +1,24 @@
+{
+  "originHash" : "c9e857de2941cdfa7a5fe1a2c64cd5818cb1b74244bfb69f5da1086f521be710",
+  "pins" : [
+    {
+      "identity" : "syphon-macos-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/josiahshank16/Syphon-MacOS-SPM",
+      "state" : {
+        "revision" : "c5699efb485efffbce80f46253df23cc80aeabac",
+        "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "virtualdisplaykit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/xocialize/VirtualDisplayKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "32227f2ccdbc982f8568dcee33ead2878a9698a6"
+      }
+    }
+  ],
+  "version" : 3
+}
