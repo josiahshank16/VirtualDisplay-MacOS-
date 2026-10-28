@@ -4,7 +4,9 @@ A lightweight utility that adds a **virtual extended desktop** to macOS and publ
 
 **Downloads:** [Virtual Display Camera v1.0.1](../../releases/tag/v1.0.1) · **All versions:** [Releases](../../releases)
 
-> **Source status:** The Swift files, icon, Xcode project, and package-resolution file are in this repository. A fresh build-from-source test on another Mac is still recommended; the source has not been independently compiled from GitHub during this documentation cleanup.
+[![macOS source build](https://github.com/josiahshank16/VirtualDisplay-MacOS-/actions/workflows/build-macos.yml/badge.svg)](../../actions/workflows/build-macos.yml)
+
+> **Source status:** The Swift files, icon, Xcode project, and locked package resolutions are included. An **unsigned Apple Silicon Release build from a fresh GitHub checkout passed** on [pull request #1](../../pull/1), and automated builds now run for source changes. This checks compilation, not physical Mac installation, macOS permissions, or notarization.
 
 ## What it does
 
@@ -63,7 +65,7 @@ Look for `minos` (the supported minimum macOS version). The verification script 
 7. Choose **Product → Build** or **Product → Run**. Confirm that the virtual screen appears and that a receiving application discovers the Syphon source.
 8. To export a downloadable build, choose **Product → Archive**, export the app, and ZIP the resulting `.app` for GitHub Releases.
 
-The project historically contained an **unused Camera System Extension target** left over from an abandoned prototype. It is unrelated to the working Syphon-based output. If a fresh build is blocked by that target's deployment or signing settings, remove that unused extension's target and its app dependency before rebuilding; source cleanup is being tracked separately.
+The obsolete Camera System Extension target was removed in [pull request #1](../../pull/1) so building the app no longer compiles or embeds that unused prototype. The main app target and project are both configured for macOS 15.0, but binary releases must still be checked independently.
 
 ## Architecture
 
