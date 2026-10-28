@@ -8,6 +8,26 @@ A lightweight utility that adds a **virtual extended desktop** to macOS and publ
 
 > **Source status:** The Swift files, icon, Xcode project, and locked package resolutions are included. An **unsigned Apple Silicon Release build from a fresh GitHub checkout passed** on [pull request #1](../../pull/1), and automated builds now run for source changes. This checks compilation, not physical Mac installation, macOS permissions, or notarization.
 
+## Screenshots
+
+### Live virtual display preview
+
+The app creates a macOS extended desktop and can show a live preview of its contents without requiring a physical monitor or capture card.
+
+![Virtual Display Camera running with its 1920 x 1080 display connected, Syphon capture active, and a live desktop preview](screenshots/02-live-preview.png)
+
+### Simple controls and native macOS display integration
+
+| Application controls | Additional display in macOS |
+|:---:|:---:|
+| ![Virtual Display Camera control window with Display Connected and Syphon Capture Active](screenshots/01-app-controls.png) | ![macOS Displays settings showing Built-in Display and Virtual Display Camera as a second monitor](screenshots/03-macos-displays.png) |
+
+### ProPresenter receiving the virtual display
+
+ProPresenter recognizes **VirtualDisplayCamera** as a **1080p60 video input** via Syphon, so the virtual desktop can be used in ProPresenter's video output workflow.
+
+![ProPresenter Inputs settings showing the VirtualDisplayCamera Syphon video source and live image preview alongside the running Virtual Display Camera app](screenshots/04-propresenter-input.png)
+
 ## What it does
 
 - Creates a **1920 × 1080** virtual extended display at **60 Hz**.
