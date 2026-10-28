@@ -1,0 +1,31 @@
+# macOS / Finder
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode local settings
+*.xcuserstate
+xcuserdata/
+*.xcuserdatad/
+*.xccheckout
+*.xcscmblueprint
+
+# Build outputs
+build/
+Build/
+DerivedData/
+*.dSYM/
+*.dSYM.zip
+
+# SwiftPM / local package builds
+.build/
+.swiftpm/xcode/package.xcworkspace/xcuserdata/
+Packages/
+
+# Local exports and archives
+*.xcarchive
+*.ipa
+*.app
+*.xcframework.zip
+
+# Keep Xcode project configuration and Package.resolved under version control.
