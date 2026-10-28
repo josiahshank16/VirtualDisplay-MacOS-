@@ -24,19 +24,38 @@ A lightweight utility that adds a **virtual extended desktop** to macOS and publ
 
 1. Download and unzip `VirtualDisplayCamera.zip`.
 2. Move `VirtualDisplayCamera.app` into **Applications**.
-3. Open the app. Depending on the signing/notarization status, macOS may require you to approve it under **System Settings → Privacy & Security**.
+3. Open the app. **This release is not Apple-notarized**, so macOS may block it on first launch. If you see an unverified-developer or malware-check warning, use the [first-launch instructions below](#first-launch-if-macos-blocks-the-app).
 4. Review any macOS **Screen & System Audio Recording** permission prompts, and reopen the app if asked.
 5. Click **Start Display**. Use **System Settings → Displays** to place the virtual screen relative to the physical screen.
 6. Move the desired app or video window onto the virtual display.
 7. Select the **VirtualDisplayCamera** Syphon input in ProPresenter or another Syphon-compatible receiving app.
 8. When finished, click **Stop Display**.
 
+### First launch: if macOS blocks the app
+
+**VirtualDisplayCamera v1.0.1 is not Apple-notarized.** The developer does not currently plan to pursue paid Developer ID distribution or notarization unless the project grows. The app ZIP has been checked for its expected contents and a valid local code signature, but that is **not** the same as an Apple malware check. macOS may show a warning such as **“Apple could not verify that VirtualDisplayCamera is free of malware”** when you download and open it.
+
+If you have independently confirmed that you trust this project and downloaded the app from the [official GitHub Releases page](../../releases), Apple provides a **per-app approval** method:
+
+1. Move the unzipped `VirtualDisplayCamera.app` to **Applications** and try opening it once.
+2. If macOS blocks it, dismiss the warning using **Done** or **Cancel** (wording varies). **Do not choose Move to Trash**.
+3. Open **Apple menu → System Settings → Privacy & Security**.
+4. Scroll down to the **Security** section. Find the notice that **VirtualDisplayCamera was blocked** and click **Open Anyway**.
+5. Enter your Mac login password or authenticate if prompted, then confirm **Open** in the follow-up dialog.
+6. The app should open, and macOS normally saves this choice as an exception for future launches of that app.
+
+If **Open Anyway** is missing, try opening the app again and return to **Privacy & Security**. Apple says the option is available for approximately **one hour** after a blocked launch. Macs administered by an organization may restrict this option.
+
+**You do not need to disable Gatekeeper system-wide, run Terminal commands, or remove quarantine metadata.** Only approve software when you recognize and trust its source. This is an exception to Apple's normal verification, not proof of notarization or malware screening.
+
+Apple's official guide: [Open apps safely on your Mac](https://support.apple.com/102445).
+
 ### Compatibility and limitations
 
 - **Architecture:** The packaged Syphon framework currently targets **Apple Silicon (arm64)**. Intel support has not been built.
 - **Minimum macOS:** The published **v1.0.1 ZIP has been independently inspected** on a GitHub-hosted Mac: the included executable reports **`minos 15.0`** and **`arm64`** architecture. This meets the OS-version requirement for Sequoia 15.5 and newer. Functional compatibility on each macOS version still needs device testing.
 - **Private APIs:** VirtualDisplayKit uses undocumented macOS virtual-display interfaces; behavior may change with macOS updates.
-- **Signing:** The published v1.0.1 ZIP passes local macOS **code-signature verification**. This does **not** demonstrate Apple notarization. Users may still have to approve installation in Privacy & Security.
+- **Signing and notarization:** The published v1.0.1 ZIP passes local macOS **code-signature verification**, but **is not Apple-notarized or Developer ID distributed**. First-launch Gatekeeper approval may be necessary; see [the instructions above](#first-launch-if-macos-blocks-the-app). Notarization is not currently planned.
 
 To inspect a downloaded ZIP on macOS, run the bundled [release verification script](scripts/verify-release.sh):
 
