@@ -1,0 +1,50 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.77098,0.87959,0.96783,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "AppIcon-iOS-Default-1024@1x.png",
+          "name" : "AppIcon-iOS-Default-1024@1x"
+        },
+        {
+          "blend-mode-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "normal"
+            }
+          ],
+          "fill" : "none",
+          "glass" : false,
+          "hidden" : true,
+          "image-name" : "monitor-dot.svg",
+          "name" : "monitor-dot",
+          "position" : {
+            "scale" : 25,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
