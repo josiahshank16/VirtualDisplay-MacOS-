@@ -164,6 +164,40 @@ struct ContentView: View {
                         )
 
                         HStack {
+                            Text("Requested display")
+                            Spacer()
+                            Text(controller.draftSettings.resolution.label)
+                                .monospacedDigit()
+                        }
+                        HStack {
+                            Text("Active display pixels")
+                            Spacer()
+                            if controller.activeDisplayPixelWidth > 0 &&
+                               controller.activeDisplayPixelHeight > 0 {
+                                Text(
+                                    "\(controller.activeDisplayPixelWidth) × " +
+                                    "\(controller.activeDisplayPixelHeight)"
+                                )
+                                .monospacedDigit()
+                                .fontWeight(.semibold)
+                            } else {
+                                Text("Waiting for display")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if controller.isActiveModeDifferentFromRequested {
+                            Label(
+                                "macOS did not activate the requested resolution. " +
+                                "The Syphon feed will use the active display size.",
+                                systemImage: "exclamationmark.triangle.fill"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        HStack {
                             Text("Frame submitted to Syphon")
                             Spacer()
                             if controller.submittedFrameWidth > 0 &&
@@ -201,9 +235,8 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
 
                         Text(
-                            "These dimensions come from a frame actually " +
-                            "submitted to Syphon, not the resolution " +
-                            "selector or scaled preview."
+                            "Compare requested, active display, and " +
+                            "submitted frame sizes to locate a resolution cap."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

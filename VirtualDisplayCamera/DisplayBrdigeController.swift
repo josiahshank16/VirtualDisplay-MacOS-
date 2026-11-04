@@ -112,6 +112,16 @@ final class DisplayBridgeController:
     @Published private(set) var capturedUpdatesTotal = 0
     @Published private(set) var submittedFrameWidth = 0
     @Published private(set) var submittedFrameHeight = 0
+    @Published private(set) var activeDisplayPixelWidth = 0
+    @Published private(set) var activeDisplayPixelHeight = 0
+
+    var isActiveModeDifferentFromRequested: Bool {
+        guard isRunning,
+              activeDisplayPixelWidth > 0,
+              activeDisplayPixelHeight > 0 else { return false }
+        return activeDisplayPixelWidth != draftSettings.resolution.width ||
+            activeDisplayPixelHeight != draftSettings.resolution.height
+    }
 
     // Editing the draft never silently overwrites a saved profile.
     @Published var draftSettings = DisplaySettings() {
@@ -233,6 +243,8 @@ final class DisplayBridgeController:
         capturedUpdatesTotal = 0
         submittedFrameWidth = 0
         submittedFrameHeight = 0
+        activeDisplayPixelWidth = 0
+        activeDisplayPixelHeight = 0
 
         // Capture all settings at Start. The settings editor is disabled
         // while running so streams and display geometry stay in sync.
@@ -244,6 +256,20 @@ final class DisplayBridgeController:
                 name: "Virtual Display Camera",
                 maxWidth: UInt32(resolution.width),
                 maxHeight: UInt32(resolution.height),
+
+                // macOS remembers the active mode for a monitor's
+                // vendor/product/serial combination. A stable identity
+                // PER RESOLUTION prevents 1080p from being restored when
+                // a fresh 4K or 8K virtual display is created.
+                //
+                // Do not use CGDisplaySetDisplayMode here. Reports on newer
+                // macOS versions indicate it can prevent virtual display
+                // teardown until the creating process exits.
+                vendorID: 0x3456,
+                productID: 0x1234,
+                serialNumber: (UInt32(resolution.width) << 16) |
+                    UInt32(resolution.height),
+
                 hiDPIEnabled: false,
                 refreshRate: CGFloat(resolution.refreshRate),
                 displayModes: [
@@ -279,13 +305,18 @@ final class DisplayBridgeController:
         captureUpdatesPerSecond = 0
         submittedFrameWidth = 0
         submittedFrameHeight = 0
+        activeDisplayPixelWidth = 0
+        activeDisplayPixelHeight = 0
         print("[Bridge] Virtual display stopped")
     }
 
     // MARK: - Display Events
 
     func virtualDisplayDidBecomeReady(_ display: VirtualDisplay) {
-        guard isRunning, virtualDisplay === display else { return }
+        guard isRunning, virtualDisplay === display,
+              let displayID = display.displayID else { return }
+
+        updateActualDisplayMode(displayID)
         displayConnected = true
         startCapture()
     }
@@ -298,15 +329,50 @@ final class DisplayBridgeController:
         guard virtualDisplay === display,
               let displayID = display.displayID else { return }
 
+        updateActualDisplayMode(displayID)
+        // CGDisplayStream needs pixel dimensions. NSScreen's frame is
+        // in points and must not be mistaken for the output pixel size.
+        let pixelDimensions = actualPixelDimensions(
+            displayID: displayID, fallbackResolution: resolution,
+            fallbackScaleFactor: scaleFactor
+        )
         displayRenderer?.configure(
             displayID: displayID,
-            resolution: resolution,
-            scaleFactor: scaleFactor
+            resolution: pixelDimensions,
+            scaleFactor: 1.0
         )
         previewRenderer?.configure(
             displayID: displayID,
-            resolution: resolution,
-            scaleFactor: scaleFactor
+            resolution: pixelDimensions,
+            scaleFactor: 1.0
+        )
+    }
+
+    // MARK: - Physical display mode reporting
+
+    private func updateActualDisplayMode(_ displayID: CGDirectDisplayID) {
+        activeDisplayPixelWidth = Int(CGDisplayPixelsWide(displayID))
+        activeDisplayPixelHeight = Int(CGDisplayPixelsHigh(displayID))
+        print(
+            "[Bridge] Active virtual display pixels: " +
+            "\(activeDisplayPixelWidth)x\(activeDisplayPixelHeight); " +
+            "requested: \(draftSettings.resolution.label)"
+        )
+    }
+
+    private func actualPixelDimensions(
+        displayID: CGDirectDisplayID,
+        fallbackResolution: CGSize,
+        fallbackScaleFactor: CGFloat
+    ) -> CGSize {
+        let pixelWidth = Int(CGDisplayPixelsWide(displayID))
+        let pixelHeight = Int(CGDisplayPixelsHigh(displayID))
+        if pixelWidth > 0 && pixelHeight > 0 {
+            return CGSize(width: pixelWidth, height: pixelHeight)
+        }
+        return CGSize(
+            width: fallbackResolution.width * fallbackScaleFactor,
+            height: fallbackResolution.height * fallbackScaleFactor
         )
     }
 
@@ -338,8 +404,12 @@ final class DisplayBridgeController:
         displayRenderer = renderer
         renderer.configure(
             displayID: displayID,
-            resolution: display.resolution,
-            scaleFactor: display.scaleFactor
+            resolution: actualPixelDimensions(
+                displayID: displayID,
+                fallbackResolution: display.resolution,
+                fallbackScaleFactor: display.scaleFactor
+            ),
+            scaleFactor: 1.0
         )
 
         captureConfigured = true
@@ -436,8 +506,12 @@ final class DisplayBridgeController:
                 previewRenderer = preview
                 preview.configure(
                     displayID: displayID,
-                    resolution: display.resolution,
-                    scaleFactor: display.scaleFactor
+                    resolution: actualPixelDimensions(
+                        displayID: displayID,
+                        fallbackResolution: display.resolution,
+                        fallbackScaleFactor: display.scaleFactor
+                    ),
+                    scaleFactor: 1.0
                 )
             }
             window.contentView = previewRenderer
