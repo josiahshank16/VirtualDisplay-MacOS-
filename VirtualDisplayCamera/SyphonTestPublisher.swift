@@ -12,7 +12,7 @@ final class SyphonTestPublisher: NSObject {
     private var device: (any MTLDevice)?
     private var commandQueue: (any MTLCommandQueue)?
 
-    func start() {
+    func start(name: String = "VirtualDisplayCamera") {
         guard server == nil else { return }
 
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -26,7 +26,7 @@ final class SyphonTestPublisher: NSObject {
         self.commandQueue = queue
 
         server = SyphonMetalServer(
-            name: "VirtualDisplayCamera",
+            name: name,
             device: device,
             options: nil
         )

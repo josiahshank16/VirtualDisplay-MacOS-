@@ -95,8 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: 420,
-                height: 400
+                width: 520,
+                height: 660
             ),
             styleMask: [
                 .titled,
@@ -115,8 +115,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Allow resizing, but prevent the window
         // from becoming too small to use.
         window.contentMinSize = NSSize(
-            width: 360,
-            height: 280
+            width: 440,
+            height: 450
         )
 
         // Remember the window's position and size.
