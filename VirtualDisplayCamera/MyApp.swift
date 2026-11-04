@@ -96,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 x: 0,
                 y: 0,
                 width: 520,
-                height: 660
+                height: 590
             ),
             styleMask: [
                 .titled,
@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from becoming too small to use.
         window.contentMinSize = NSSize(
             width: 440,
-            height: 450
+            height: 400
         )
 
         // Remember the window's position and size.

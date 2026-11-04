@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import Combine
 import VirtualDisplayKit
+import IOSurface
 
 // All display resolutions currently use a 16:9 aspect ratio.
 // Changing resolution recreates the virtual display, so it is available
@@ -12,6 +13,7 @@ enum DisplayResolution: String, Codable, CaseIterable, Identifiable {
     case fullHD
     case qhd
     case ultraHD
+    case ultraHD8K
 
     var id: String { rawValue }
 
@@ -21,6 +23,7 @@ enum DisplayResolution: String, Codable, CaseIterable, Identifiable {
         case .fullHD: 1920
         case .qhd: 2560
         case .ultraHD: 3840
+        case .ultraHD8K: 7680
         }
     }
 
@@ -30,10 +33,16 @@ enum DisplayResolution: String, Codable, CaseIterable, Identifiable {
         case .fullHD: 1080
         case .qhd: 1440
         case .ultraHD: 2160
+        case .ultraHD8K: 4320
         }
     }
 
-    var label: String { "\(width) × \(height)" }
+    var label: String {
+        let dimensions = "\(width) × \(height)"
+        return self == .ultraHD8K ? "\(dimensions) (8K test)" : dimensions
+    }
+
+    var refreshRate: Int { self == .ultraHD8K ? 30 : 60 }
 }
 
 struct DisplaySettings: Codable, Equatable {
@@ -59,17 +68,21 @@ private final class CaptureFrameCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var intervalCount = 0
     private var totalCount = 0
+    private var lastWidth = 0
+    private var lastHeight = 0
 
-    func record() {
+    func record(width: Int, height: Int) {
         lock.lock()
         intervalCount += 1
         totalCount += 1
+        lastWidth = width
+        lastHeight = height
         lock.unlock()
     }
 
-    func sample() -> (interval: Int, total: Int) {
+    func sample() -> (interval: Int, total: Int, width: Int, height: Int) {
         lock.lock()
-        let result = (intervalCount, totalCount)
+        let result = (intervalCount, totalCount, lastWidth, lastHeight)
         intervalCount = 0
         lock.unlock()
         return result
@@ -79,6 +92,8 @@ private final class CaptureFrameCounter: @unchecked Sendable {
         lock.lock()
         intervalCount = 0
         totalCount = 0
+        lastWidth = 0
+        lastHeight = 0
         lock.unlock()
     }
 }
@@ -95,6 +110,8 @@ final class DisplayBridgeController:
 
     @Published private(set) var captureUpdatesPerSecond = 0.0
     @Published private(set) var capturedUpdatesTotal = 0
+    @Published private(set) var submittedFrameWidth = 0
+    @Published private(set) var submittedFrameHeight = 0
 
     // Editing the draft never silently overwrites a saved profile.
     @Published var draftSettings = DisplaySettings() {
@@ -214,6 +231,8 @@ final class DisplayBridgeController:
         frameCounter.reset()
         captureUpdatesPerSecond = 0
         capturedUpdatesTotal = 0
+        submittedFrameWidth = 0
+        submittedFrameHeight = 0
 
         // Capture all settings at Start. The settings editor is disabled
         // while running so streams and display geometry stay in sync.
@@ -226,12 +245,12 @@ final class DisplayBridgeController:
                 maxWidth: UInt32(resolution.width),
                 maxHeight: UInt32(resolution.height),
                 hiDPIEnabled: false,
-                refreshRate: 60,
+                refreshRate: CGFloat(resolution.refreshRate),
                 displayModes: [
                     DisplayMode(
                         width: resolution.width,
                         height: resolution.height,
-                        refreshRate: 60
+                        refreshRate: CGFloat(resolution.refreshRate)
                     )
                 ]
             )
@@ -258,6 +277,8 @@ final class DisplayBridgeController:
 
         displayConnected = false
         captureUpdatesPerSecond = 0
+        submittedFrameWidth = 0
+        submittedFrameHeight = 0
         print("[Bridge] Virtual display stopped")
     }
 
@@ -306,8 +327,12 @@ final class DisplayBridgeController:
         let counter = frameCounter
 
         renderer.onFrameAvailable = { [weak syphonPublisher] surface in
-            counter.record()
-            syphonPublisher?.publish(surface: surface)
+            if syphonPublisher?.publish(surface: surface) == true {
+                counter.record(
+                    width: IOSurfaceGetWidth(surface),
+                    height: IOSurfaceGetHeight(surface)
+                )
+            }
         }
 
         displayRenderer = renderer
@@ -354,6 +379,8 @@ final class DisplayBridgeController:
         let sample = frameCounter.sample()
         captureUpdatesPerSecond = Double(sample.interval) / elapsed
         capturedUpdatesTotal = sample.total
+        submittedFrameWidth = sample.width
+        submittedFrameHeight = sample.height
     }
 
     private func stopStatisticsTimer() {

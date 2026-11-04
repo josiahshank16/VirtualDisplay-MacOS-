@@ -3,189 +3,130 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var controller: DisplayBridgeController
     @State private var newProfileName = ""
+    @State private var showingNewProfileAlert = false
+    @State private var showingDeleteProfileAlert = false
+
+    private var selectedProfileName: String {
+        controller.profiles.first(where: { $0.id == controller.selectedProfileID })?.name
+            ?? "Choose Profile"
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 15) {
+
+                // Compact dropdown, always at the top of the controls.
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(controller.profiles) { profile in
+                            Button {
+                                controller.loadProfile(profile.id)
+                            } label: {
+                                if profile.id == controller.selectedProfileID {
+                                    Label(profile.name, systemImage: "checkmark")
+                                } else {
+                                    Text(profile.name)
+                                }
+                            }
+                            .disabled(controller.isRunning)
+                        }
+
+                        Divider()
+
+                        Button("Save Changes to Current Profile") {
+                            controller.updateSelectedProfile()
+                        }
+                        .disabled(
+                            controller.isRunning ||
+                            !controller.hasUnsavedChanges
+                        )
+
+                        Button("Delete Current Profile…") {
+                            showingDeleteProfileAlert = true
+                        }
+                        .disabled(
+                            controller.isRunning ||
+                            controller.profiles.count <= 1
+                        )
+
+                        Divider()
+
+                        Button {
+                            newProfileName = ""
+                            showingNewProfileAlert = true
+                        } label: {
+                            Label("Add New Profile…", systemImage: "plus")
+                        }
+                        .disabled(controller.isRunning)
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: "square.stack.3d.up")
+                            Text(selectedProfileName)
+                                .lineLimit(1)
+                            if controller.hasUnsavedChanges {
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 6))
+                                    .foregroundStyle(.orange)
+                                    .help("Settings differ from the saved profile")
+                            }
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .menuStyle(.borderlessButton)
+
+                    if controller.hasUnsavedChanges {
+                        Text("Unsaved")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+
                 HStack(spacing: 12) {
                     Image(systemName: "display")
-                        .font(.system(size: 34))
+                        .font(.system(size: 32))
                         .foregroundStyle(.blue)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Virtual Display Camera")
                             .font(.title2).bold()
                         Text("Syphon capture and display controls")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                GroupBox("Connection") {
+                GroupBox("Live Capture") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Label(
-                            controller.displayConnected
-                                ? "Display Connected" : "Display Disconnected",
-                            systemImage: controller.displayConnected
-                                ? "checkmark.circle.fill" : "circle.dashed"
-                        )
-                        .foregroundStyle(
-                            controller.displayConnected ? .green : .secondary
-                        )
-
                         HStack {
-                            Button("Start Display") { controller.start() }
-                                .disabled(controller.isRunning)
-                            Button("Stop Display") { controller.stop() }
-                                .disabled(!controller.isRunning)
-                            Spacer()
-                            Text("\(controller.draftSettings.resolution.label)  ·  60 Hz")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Label(
-                            controller.captureConfigured
-                                ? "Syphon Capture Active"
-                                : "Syphon Capture Inactive",
-                            systemImage: "video.fill"
-                        )
-                        .foregroundStyle(
-                            controller.captureConfigured ? .green : .secondary
-                        )
-
-                        HStack {
-                            Text("Capture updates")
-                            Spacer()
-                            Text(String(
-                                format: "%.1f / sec",
-                                controller.captureUpdatesPerSecond
-                            )).monospacedDigit()
-                        }
-                        HStack {
-                            Text("Total updates")
-                            Spacer()
-                            Text(controller.capturedUpdatesTotal.formatted())
-                                .monospacedDigit()
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                }
-
-                GroupBox("Saved Profiles") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Picker(
-                            "Current profile",
-                            selection: Binding(
-                                get: { controller.selectedProfileID },
-                                set: { controller.loadProfile($0) }
-                            )
-                        ) {
-                            ForEach(controller.profiles) { profile in
-                                Text(profile.name).tag(profile.id)
-                            }
-                        }
-                        .disabled(controller.isRunning)
-
-                        if controller.hasUnsavedChanges {
                             Label(
-                                "Unsaved settings changes",
-                                systemImage: "pencil.circle"
+                                controller.displayConnected
+                                    ? "Display Connected" : "Display Disconnected",
+                                systemImage: controller.displayConnected
+                                    ? "checkmark.circle.fill" : "circle.dashed"
+                            )
+                            .foregroundStyle(
+                                controller.displayConnected ? .green : .secondary
+                            )
+                            Spacer()
+                            Text(
+                                "\(controller.draftSettings.resolution.label) @ " +
+                                "\(controller.draftSettings.resolution.refreshRate) Hz"
                             )
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         }
 
-                        HStack {
-                            Button("Update Profile") {
-                                controller.updateSelectedProfile()
-                            }
-                            .disabled(
-                                controller.isRunning ||
-                                !controller.hasUnsavedChanges
-                            )
-                            Button("Delete Profile", role: .destructive) {
-                                controller.deleteSelectedProfile()
-                            }
-                            .disabled(
-                                controller.isRunning ||
-                                controller.profiles.count <= 1
-                            )
-                            Spacer()
-                        }
+                        // Preview now lives beside Start/Stop.
+                        HStack(spacing: 8) {
+                            Button("Start Display") { controller.start() }
+                                .disabled(controller.isRunning)
 
-                        Divider()
+                            Button("Stop Display") { controller.stop() }
+                                .disabled(!controller.isRunning)
 
-                        HStack {
-                            TextField(
-                                "New profile name",
-                                text: $newProfileName
-                            )
-                            Button("Save as New") {
-                                controller.createProfile(named: newProfileName)
-                                newProfileName = ""
-                            }
-                            .disabled(
-                                controller.isRunning ||
-                                newProfileName.trimmingCharacters(
-                                    in: .whitespacesAndNewlines
-                                ).isEmpty
-                            )
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                }
-
-                GroupBox("Display and Output Settings") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Picker(
-                            "Virtual resolution",
-                            selection: $controller.draftSettings.resolution
-                        ) {
-                            ForEach(DisplayResolution.allCases) { res in
-                                Text(res.label).tag(res)
-                            }
-                        }
-
-                        Toggle(
-                            "Show cursor in Syphon output",
-                            isOn: $controller.draftSettings.showCursorInSyphon
-                        )
-
-                        Text(
-                            "Preview always shows the cursor. When the " +
-                            "Syphon cursor is hidden, opening the preview " +
-                            "uses a separate preview-only capture stream."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                        HStack {
-                            Text("Syphon source name")
-                            TextField(
-                                "VirtualDisplayCamera",
-                                text: $controller.draftSettings.syphonName
-                            )
-                            .textFieldStyle(.roundedBorder)
-                        }
-
-                        Text(
-                            "Resolution, cursor, and source-name changes " +
-                            "apply the next time you start the display."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                    .disabled(controller.isRunning)
-                }
-
-                GroupBox("Preview") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
                             Button {
                                 if controller.isPreviewVisible {
                                     controller.hidePreview()
@@ -204,27 +145,135 @@ struct ContentView: View {
                                 !controller.captureConfigured &&
                                 !controller.isPreviewVisible
                             )
-                            Spacer()
-                            Text("Off by default")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                         }
 
                         Toggle(
                             "Keep preview on top",
                             isOn: $controller.draftSettings.floatingPreview
                         )
-                        Text("The preview is view-only; it does not forward mouse clicks.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        Label(
+                            controller.captureConfigured
+                                ? "Capture Configured" : "Capture Inactive",
+                            systemImage: "video.fill"
+                        )
+                        .foregroundStyle(
+                            controller.captureConfigured ? .green : .secondary
+                        )
+
+                        HStack {
+                            Text("Frame submitted to Syphon")
+                            Spacer()
+                            if controller.submittedFrameWidth > 0 &&
+                               controller.submittedFrameHeight > 0 {
+                                Text(
+                                    "\(controller.submittedFrameWidth) × " +
+                                    "\(controller.submittedFrameHeight)"
+                                )
+                                .monospacedDigit()
+                                .fontWeight(.semibold)
+                            } else {
+                                Text("Waiting for frame")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack {
+                            Text("Submitted frames / sec")
+                            Spacer()
+                            Text(
+                                String(
+                                    format: "%.1f",
+                                    controller.captureUpdatesPerSecond
+                                )
+                            )
+                            .monospacedDigit()
+                        }
+
+                        HStack {
+                            Text("Total submitted frames")
+                            Spacer()
+                            Text(controller.capturedUpdatesTotal.formatted())
+                                .monospacedDigit()
+                        }
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            "These dimensions come from a frame actually " +
+                            "submitted to Syphon, not the resolution " +
+                            "selector or scaled preview."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
                 }
 
+                GroupBox("Display and Output Settings") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker(
+                            "Virtual resolution",
+                            selection: $controller.draftSettings.resolution
+                        ) {
+                            ForEach(DisplayResolution.allCases) { resolution in
+                                Text(resolution.label).tag(resolution)
+                            }
+                        }
+
+                        if controller.draftSettings.resolution == .ultraHD8K {
+                            Label(
+                                "8K is an experimental 30 Hz mode. It may " +
+                                "be slow or unavailable on some Macs. " +
+                                "Test with a smaller mode first.",
+                                systemImage: "exclamationmark.triangle"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Toggle(
+                            "Show cursor in Syphon output",
+                            isOn: $controller.draftSettings.showCursorInSyphon
+                        )
+
+                        Text(
+                            "The preview always shows the cursor. When " +
+                            "Syphon hides it, a separate preview-only " +
+                            "capture runs while the preview is open."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        HStack {
+                            Text("Syphon source name")
+                            TextField(
+                                "VirtualDisplayCamera",
+                                text: $controller.draftSettings.syphonName
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
+
+                        Text(
+                            "Resolution, cursor and source-name changes " +
+                            "apply when you next start the display. " +
+                            "Save them through the profile dropdown."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .disabled(controller.isRunning)
+                }
+
                 Text(
-                    "Closing or minimizing the controls window " +
-                    "does not stop the virtual display. " +
-                    "Reopen controls from the Dock."
+                    "Closing or minimizing controls does not stop the " +
+                    "virtual display. Reopen them from the Dock."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -233,6 +282,24 @@ struct ContentView: View {
             }
             .padding(20)
         }
-        .frame(minWidth: 440, minHeight: 450)
+        .frame(minWidth: 440, minHeight: 400)
+        .alert("Add New Profile", isPresented: $showingNewProfileAlert) {
+            TextField("Profile name", text: $newProfileName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save Profile") {
+                controller.createProfile(named: newProfileName)
+                newProfileName = ""
+            }
+        } message: {
+            Text("Save the current display and output settings as a new profile.")
+        }
+        .alert("Delete Current Profile?", isPresented: $showingDeleteProfileAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                controller.deleteSelectedProfile()
+            }
+        } message: {
+            Text("This deletes the selected profile from the app.")
+        }
     }
 }
