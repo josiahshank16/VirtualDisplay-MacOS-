@@ -257,31 +257,47 @@ final class DisplayBridgeController:
         let settings = draftSettings
         let resolution = settings.resolution
 
+        // For large output sizes, create a Retina virtual monitor:
+        // maxWidth/maxHeight describe the physical framebuffer and
+        // CGVirtualDisplayMode describes the logical desktop at 2x.
+        // This matches Chromium's CGVirtualDisplay setup and prevents
+        // asking WindowServer for an effectively 8K logical desktop
+        // when we only need a 4K Syphon output.
+        //
+        // 720p/1080p retain the original unscaled settings.
+        let usesRetinaBacking = resolution.width > 1920
+        let logicalWidth = usesRetinaBacking
+            ? resolution.width / 2 : resolution.width
+        let logicalHeight = usesRetinaBacking
+            ? resolution.height / 2 : resolution.height
+
+        print(
+            "[Bridge] Requested output \(resolution.width)x\(resolution.height); " +
+            "advertised logical mode \(logicalWidth)x\(logicalHeight); " +
+            "HiDPI enabled \(usesRetinaBacking)"
+        )
+
         let display = VirtualDisplay(
             configuration: VirtualDisplayConfiguration(
                 name: "Virtual Display Camera",
                 maxWidth: UInt32(resolution.width),
                 maxHeight: UInt32(resolution.height),
 
-                // macOS remembers the active mode for a monitor's
-                // vendor/product/serial combination. A stable identity
-                // PER RESOLUTION prevents 1080p from being restored when
-                // a fresh 4K or 8K virtual display is created.
-                //
-                // Do not use CGDisplaySetDisplayMode here. Reports on newer
-                // macOS versions indicate it can prevent virtual display
-                // teardown until the creating process exits.
+                // The Retina-mode experiment gets a different monitor
+                // identity, preventing a previously remembered 1x mode
+                // from silently overriding the new settings.
+                // Do not force mode switches after display creation.
                 vendorID: 0x3456,
-                productID: 0x1234,
+                productID: usesRetinaBacking ? 0x1235 : 0x1234,
                 serialNumber: (UInt32(resolution.width) << 16) |
                     UInt32(resolution.height),
 
-                hiDPIEnabled: false,
+                hiDPIEnabled: usesRetinaBacking,
                 refreshRate: CGFloat(resolution.refreshRate),
                 displayModes: [
                     DisplayMode(
-                        width: resolution.width,
-                        height: resolution.height,
+                        width: logicalWidth,
+                        height: logicalHeight,
                         refreshRate: CGFloat(resolution.refreshRate)
                     )
                 ]
@@ -326,6 +342,7 @@ final class DisplayBridgeController:
               let displayID = display.displayID else { return }
 
         updateActualDisplayMode(displayID)
+        logAvailableDisplayModes(displayID)
         displayConnected = true
         startCapture()
     }
@@ -398,6 +415,25 @@ final class DisplayBridgeController:
             print(
                 "[Bridge] Current CGDisplayMode unavailable; " +
                 "waiting for a valid pixel size before diagnosing a cap"
+            )
+        }
+    }
+
+    // Diagnostic only. Some macOS versions initially return an empty
+    // list to the process that created a new virtual display.
+    private func logAvailableDisplayModes(_ displayID: CGDirectDisplayID) {
+        guard let modes = CGDisplayCopyAllDisplayModes(displayID, nil)
+            as? [CGDisplayMode] else {
+            print("[Bridge] Available CoreGraphics modes not readable yet")
+            return
+        }
+
+        print("[Bridge] Available CoreGraphics modes (\(modes.count)):")
+        for mode in modes.prefix(25) {
+            print(
+                "  - logical \(mode.width)x\(mode.height), " +
+                "pixels \(mode.pixelWidth)x\(mode.pixelHeight), " +
+                "\(mode.refreshRate)Hz"
             )
         }
     }
