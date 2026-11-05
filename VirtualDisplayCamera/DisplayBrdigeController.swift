@@ -394,6 +394,9 @@ final class DisplayBridgeController:
             self.isSelectingRegion = false
             guard let rect else { return } // Escape / too-small selection
             self.draftSettings.regionRect = rect
+            self.draftSettings.regionDisplayName = self.availableDisplays.first(
+                where: { $0.id == id }
+            )?.name ?? screen.localizedName
             self.captureError = nil
         }
     }
