@@ -340,7 +340,8 @@ final class DisplayBridgeController:
                           window.frame.height >= 64,
                           !bundleID.isEmpty,
                           bundleID != ownBundleID,
-                          normalWindowIDs.contains(window.windowID),
+                          (normalWindowIDs.isEmpty ||
+                           normalWindowIDs.contains(window.windowID)),
                           !lowerTitle.contains("display backstop"),
                           !lowerTitle.contains("underbelly"),
                           !lowerApp.contains("display backstop"),
@@ -827,6 +828,11 @@ final class DisplayBridgeController:
                 let scale = CGFloat(filter.pointPixelScale)
                 width = max(2, Int((window.frame.width * scale).rounded()))
                 height = max(2, Int((window.frame.height * scale).rounded()))
+                print(
+                    "[Bridge] Window geometry: window \(window.frame), " +
+                    "contentRect \(filter.contentRect), scale \(scale), " +
+                    "output \(width)x\(height)"
+                )
 
             case .region:
                 guard let choice = availableDisplays.first(where: {
