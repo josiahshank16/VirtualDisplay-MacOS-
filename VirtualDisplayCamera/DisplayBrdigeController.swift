@@ -114,6 +114,9 @@ final class DisplayBridgeController:
     @Published private(set) var submittedFrameHeight = 0
     @Published private(set) var activeDisplayPixelWidth = 0
     @Published private(set) var activeDisplayPixelHeight = 0
+    @Published private(set) var activeDisplayLogicalWidth = 0
+    @Published private(set) var activeDisplayLogicalHeight = 0
+    @Published private(set) var activeDisplayModeRefreshRate = 0.0
 
     var isActiveModeDifferentFromRequested: Bool {
         guard isRunning,
@@ -245,6 +248,9 @@ final class DisplayBridgeController:
         submittedFrameHeight = 0
         activeDisplayPixelWidth = 0
         activeDisplayPixelHeight = 0
+        activeDisplayLogicalWidth = 0
+        activeDisplayLogicalHeight = 0
+        activeDisplayModeRefreshRate = 0
 
         // Capture all settings at Start. The settings editor is disabled
         // while running so streams and display geometry stay in sync.
@@ -307,6 +313,9 @@ final class DisplayBridgeController:
         submittedFrameHeight = 0
         activeDisplayPixelWidth = 0
         activeDisplayPixelHeight = 0
+        activeDisplayLogicalWidth = 0
+        activeDisplayLogicalHeight = 0
+        activeDisplayModeRefreshRate = 0
         print("[Bridge] Virtual display stopped")
     }
 
@@ -348,16 +357,49 @@ final class DisplayBridgeController:
         )
     }
 
-    // MARK: - Physical display mode reporting
+    // MARK: - Real CoreGraphics display mode
+
+    // CGDisplayPixelsWide/High and NSScreen.frame can describe logical
+    // dimensions for a Retina/HiDPI mode. They are not reliable evidence
+    // of the physical frame-buffer size. Use the current CGDisplayMode.
+    private func readActiveMode(_ displayID: CGDirectDisplayID) -> CGDisplayMode? {
+        CGDisplayCopyDisplayMode(displayID)
+    }
 
     private func updateActualDisplayMode(_ displayID: CGDirectDisplayID) {
-        activeDisplayPixelWidth = Int(CGDisplayPixelsWide(displayID))
-        activeDisplayPixelHeight = Int(CGDisplayPixelsHigh(displayID))
-        print(
-            "[Bridge] Active virtual display pixels: " +
-            "\(activeDisplayPixelWidth)x\(activeDisplayPixelHeight); " +
-            "requested: \(draftSettings.resolution.label)"
-        )
+        if let mode = readActiveMode(displayID) {
+            activeDisplayLogicalWidth = mode.width
+            activeDisplayLogicalHeight = mode.height
+            activeDisplayPixelWidth = mode.pixelWidth
+            activeDisplayPixelHeight = mode.pixelHeight
+            activeDisplayModeRefreshRate = mode.refreshRate
+
+            print(
+                "[Bridge] Active mode: " +
+                "logical \(mode.width)x\(mode.height), " +
+                "physical \(mode.pixelWidth)x\(mode.pixelHeight), " +
+                "refresh \(mode.refreshRate)Hz; " +
+                "requested \(draftSettings.resolution.label)"
+            )
+            if let screen = virtualDisplay?.screen {
+                print(
+                    "[Bridge] NSScreen frame \(screen.frame.size), " +
+                    "backingScaleFactor \(screen.backingScaleFactor)"
+                )
+            }
+        } else {
+            // A temporary fallback for cases where WindowServer hasn't
+            // populated the mode yet. Re-check on display-change events.
+            activeDisplayLogicalWidth = Int(CGDisplayPixelsWide(displayID))
+            activeDisplayLogicalHeight = Int(CGDisplayPixelsHigh(displayID))
+            activeDisplayPixelWidth = 0
+            activeDisplayPixelHeight = 0
+            activeDisplayModeRefreshRate = 0
+            print(
+                "[Bridge] Current CGDisplayMode unavailable; " +
+                "waiting for a valid pixel size before diagnosing a cap"
+            )
+        }
     }
 
     private func actualPixelDimensions(
@@ -365,11 +407,14 @@ final class DisplayBridgeController:
         fallbackResolution: CGSize,
         fallbackScaleFactor: CGFloat
     ) -> CGSize {
-        let pixelWidth = Int(CGDisplayPixelsWide(displayID))
-        let pixelHeight = Int(CGDisplayPixelsHigh(displayID))
-        if pixelWidth > 0 && pixelHeight > 0 {
-            return CGSize(width: pixelWidth, height: pixelHeight)
+        if let mode = readActiveMode(displayID),
+           mode.pixelWidth > 0,
+           mode.pixelHeight > 0 {
+            return CGSize(width: mode.pixelWidth, height: mode.pixelHeight)
         }
+
+        // Fallback until CGDisplayCopyDisplayMode is available. This is
+        // an approximation only; the UI won't call it a physical mode.
         return CGSize(
             width: fallbackResolution.width * fallbackScaleFactor,
             height: fallbackResolution.height * fallbackScaleFactor

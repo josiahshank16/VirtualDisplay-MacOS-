@@ -170,7 +170,23 @@ struct ContentView: View {
                                 .monospacedDigit()
                         }
                         HStack {
-                            Text("Active display pixels")
+                            Text("Desktop coordinates (points)")
+                            Spacer()
+                            if controller.activeDisplayLogicalWidth > 0 &&
+                               controller.activeDisplayLogicalHeight > 0 {
+                                Text(
+                                    "\(controller.activeDisplayLogicalWidth) × " +
+                                    "\(controller.activeDisplayLogicalHeight)"
+                                )
+                                .monospacedDigit()
+                            } else {
+                                Text("Waiting for mode")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        HStack {
+                            Text("Active mode (physical pixels)")
                             Spacer()
                             if controller.activeDisplayPixelWidth > 0 &&
                                controller.activeDisplayPixelHeight > 0 {
@@ -181,15 +197,15 @@ struct ContentView: View {
                                 .monospacedDigit()
                                 .fontWeight(.semibold)
                             } else {
-                                Text("Waiting for display")
+                                Text("Waiting for mode")
                                     .foregroundStyle(.secondary)
                             }
                         }
 
                         if controller.isActiveModeDifferentFromRequested {
                             Label(
-                                "macOS did not activate the requested resolution. " +
-                                "The Syphon feed will use the active display size.",
+                                "macOS activated a different physical resolution. " +
+                                "Check the available modes in Displays settings.",
                                 systemImage: "exclamationmark.triangle.fill"
                             )
                             .font(.caption)
@@ -212,6 +228,20 @@ struct ContentView: View {
                                 Text("Waiting for frame")
                                     .foregroundStyle(.secondary)
                             }
+                        }
+
+                        if controller.submittedFrameWidth > 0 &&
+                           controller.activeDisplayPixelWidth > 0 &&
+                           (controller.submittedFrameWidth != controller.activeDisplayPixelWidth ||
+                            controller.submittedFrameHeight != controller.activeDisplayPixelHeight) {
+                            Label(
+                                "Capture frame dimensions differ from the active " +
+                                "display mode. This points to capture scaling.",
+                                systemImage: "exclamationmark.triangle"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                         }
 
                         HStack {
