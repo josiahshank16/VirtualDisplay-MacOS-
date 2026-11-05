@@ -90,7 +90,11 @@ final class RegionSelectionCoordinator {
         overlay.autoresizingMask = [.width, .height]
         overlay.dimBackground = !mirrorVirtualDisplay
         overlay.isMirroredSelection = mirrorVirtualDisplay
-        overlay.onSelection = { [weak self] chosen in
+        overlay.onSelection = { [weak self, weak overlay] chosen in
+            guard let overlay else {
+                completion(nil)
+                return
+            }
             self?.cancel()
 
             let selected = chosen.map { rect in
