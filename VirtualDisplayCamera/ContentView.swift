@@ -97,34 +97,143 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                GroupBox("Capture Source") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("Source", selection: $controller.draftSettings.sourceMode) {
+                            ForEach(CaptureSourceMode.allCases) { source in
+                                Text(source.rawValue).tag(source)
+                            }
+                        }
+                        .disabled(controller.isRunning)
+
+                        if controller.draftSettings.sourceMode == .window {
+                            HStack {
+                                Picker(
+                                    "Window",
+                                    selection: Binding<CGWindowID>(
+                                        get: { controller.selectedWindowID ?? 0 },
+                                        set: { controller.selectWindow($0) }
+                                    )
+                                ) {
+                                    Text("Select a window…").tag(CGWindowID(0))
+                                    ForEach(controller.availableWindows) { choice in
+                                        Text(choice.label).tag(choice.id)
+                                    }
+                                }
+                                .disabled(controller.isRunning)
+                                Button {
+                                    controller.refreshAvailableSources()
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .help("Refresh available application windows")
+                                .disabled(controller.isRunning || controller.isRefreshingSources)
+                            }
+
+                            Text(
+                                "Capture a selected application window, even " +
+                                "when other windows overlap it. Some hidden, " +
+                                "minimized, or protected windows may be unavailable."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if controller.draftSettings.sourceMode == .region {
+                            HStack {
+                                Picker(
+                                    "Monitor",
+                                    selection: Binding<CGDirectDisplayID>(
+                                        get: { controller.selectedDisplayID ?? 0 },
+                                        set: { controller.selectRegionDisplay($0) }
+                                    )
+                                ) {
+                                    Text("Select a monitor…").tag(CGDirectDisplayID(0))
+                                    ForEach(controller.availableDisplays) { choice in
+                                        Text(choice.label).tag(choice.id)
+                                    }
+                                }
+                                .disabled(controller.isRunning)
+
+                                Button {
+                                    controller.refreshAvailableSources()
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .help("Refresh monitors")
+                                .disabled(controller.isRunning || controller.isRefreshingSources)
+                            }
+
+                            HStack {
+                                Button {
+                                    controller.selectRegionWithMouse()
+                                } label: {
+                                    Label("Select Region…", systemImage: "crop")
+                                }
+                                .disabled(controller.isRunning ||
+                                          controller.isSelectingRegion ||
+                                          controller.selectedDisplayID == nil)
+
+                                Text(controller.regionSummary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(
+                                "Draw a rectangle directly on the monitor. " +
+                                "Press Escape to cancel. The region captures " +
+                                "the pixels beneath it, including overlapping windows."
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if controller.isRefreshingSources {
+                            ProgressView("Finding available sources…")
+                                .controlSize(.small)
+                        }
+
+                        if let error = controller.captureError {
+                            Label(error, systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 GroupBox("Live Capture") {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Label(
-                                controller.displayConnected
-                                    ? "Display Connected" : "Display Disconnected",
-                                systemImage: controller.displayConnected
+                                controller.captureConfigured
+                                    ? "Capture Active"
+                                    : (controller.isRunning ? "Starting Capture…" : "Capture Stopped"),
+                                systemImage: controller.captureConfigured
                                     ? "checkmark.circle.fill" : "circle.dashed"
                             )
                             .foregroundStyle(
-                                controller.displayConnected ? .green : .secondary
+                                controller.captureConfigured ? .green : .secondary
                             )
                             Spacer()
-                            Text(
-                                "\(controller.draftSettings.resolution.label) @ " +
-                                "\(controller.draftSettings.resolution.refreshRate) Hz"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            if controller.draftSettings.sourceMode == .virtualDisplay {
+                                Text(
+                                    "\(controller.draftSettings.resolution.label) @ " +
+                                    "\(controller.draftSettings.resolution.refreshRate) Hz"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            }
                         }
 
                         // Preview now lives beside Start/Stop.
                         HStack(spacing: 8) {
-                            Button("Start Display") { controller.start() }
+                            Button("Start Capture") { controller.start() }
                                 .disabled(controller.isRunning)
 
-                            Button("Stop Display") { controller.stop() }
+                            Button("Stop Capture") { controller.stop() }
                                 .disabled(!controller.isRunning)
 
                             Button {
@@ -163,6 +272,7 @@ struct ContentView: View {
                             controller.captureConfigured ? .green : .secondary
                         )
 
+                        if controller.draftSettings.sourceMode == .virtualDisplay {
                         HStack {
                             Text("Requested display")
                             Spacer()
@@ -211,6 +321,8 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)
+                        }
+
                         }
 
                         HStack {
@@ -278,16 +390,19 @@ struct ContentView: View {
 
                 GroupBox("Display and Output Settings") {
                     VStack(alignment: .leading, spacing: 12) {
-                        Picker(
-                            "Virtual resolution",
-                            selection: $controller.draftSettings.resolution
-                        ) {
-                            ForEach(DisplayResolution.allCases) { resolution in
-                                Text(resolution.label).tag(resolution)
+                        if controller.draftSettings.sourceMode == .virtualDisplay {
+                            Picker(
+                                "Virtual resolution",
+                                selection: $controller.draftSettings.resolution
+                            ) {
+                                ForEach(DisplayResolution.allCases) { resolution in
+                                    Text(resolution.label).tag(resolution)
+                                }
                             }
                         }
 
-                        if controller.draftSettings.resolution == .ultraHD8K {
+                        if controller.draftSettings.sourceMode == .virtualDisplay &&
+                           controller.draftSettings.resolution == .ultraHD8K {
                             Label(
                                 "8K is an experimental 30 Hz mode. It may " +
                                 "be slow or unavailable on some Macs. " +
@@ -298,6 +413,24 @@ struct ContentView: View {
                             .foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)
                         }
+
+                        Picker(
+                            "Output FPS cap",
+                            selection: $controller.draftSettings.outputFPSCap
+                        ) {
+                            Text("No additional cap").tag(0)
+                            Text("15 fps").tag(15)
+                            Text("24 fps").tag(24)
+                            Text("30 fps").tag(30)
+                            Text("60 fps").tag(60)
+                        }
+                        Text(
+                            "Caps limit maximum published frames, not minimum " +
+                            "video smoothness. ScreenCaptureKit runs at up to " +
+                            "60 fps when no cap is selected."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                         Toggle(
                             "Show cursor in Syphon output",
@@ -322,9 +455,9 @@ struct ContentView: View {
                         }
 
                         Text(
-                            "Resolution, cursor and source-name changes " +
-                            "apply when you next start the display. " +
-                            "Save them through the profile dropdown."
+                            "Source, resolution, FPS cap, cursor and " +
+                            "source-name settings apply at the next capture " +
+                            "start. Save settings through the profile dropdown."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -346,6 +479,14 @@ struct ContentView: View {
             .padding(20)
         }
         .frame(minWidth: 440, minHeight: 400)
+        .onAppear {
+            controller.refreshAvailableSources()
+        }
+        .onChange(of: controller.draftSettings.sourceMode) { _, newMode in
+            if newMode != .virtualDisplay {
+                controller.refreshAvailableSources()
+            }
+        }
         .alert("Add New Profile", isPresented: $showingNewProfileAlert) {
             TextField("Profile name", text: $newProfileName)
             Button("Cancel", role: .cancel) {}

@@ -4,6 +4,7 @@ import AppKit
 import Combine
 import VirtualDisplayKit
 import IOSurface
+import ScreenCaptureKit
 
 // All display resolutions currently use a 16:9 aspect ratio.
 // Changing resolution recreates the virtual display, so it is available
@@ -51,9 +52,39 @@ struct DisplaySettings: Codable, Equatable {
     var floatingPreview: Bool = false
     var syphonName: String = "VirtualDisplayCamera"
 
+    // Added in Batch 2. Custom decoding preserves saved Batch 1 profiles.
+    var sourceMode: CaptureSourceMode = .virtualDisplay
+    var outputFPSCap: Int = 0 // 0 = no additional publishing cap
+    var windowTitle: String = ""
+    var windowBundleID: String = ""
+    var regionDisplayName: String = ""
+    var regionRect: CGRect? = nil
+
     var resolvedSyphonName: String {
         let trimmed = syphonName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "VirtualDisplayCamera" : trimmed
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case resolution, showCursorInSyphon, floatingPreview, syphonName
+        case sourceMode, outputFPSCap, windowTitle, windowBundleID
+        case regionDisplayName, regionRect
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        resolution = try values.decodeIfPresent(DisplayResolution.self, forKey: .resolution) ?? .fullHD
+        showCursorInSyphon = try values.decodeIfPresent(Bool.self, forKey: .showCursorInSyphon) ?? true
+        floatingPreview = try values.decodeIfPresent(Bool.self, forKey: .floatingPreview) ?? false
+        syphonName = try values.decodeIfPresent(String.self, forKey: .syphonName) ?? "VirtualDisplayCamera"
+        sourceMode = try values.decodeIfPresent(CaptureSourceMode.self, forKey: .sourceMode) ?? .virtualDisplay
+        outputFPSCap = try values.decodeIfPresent(Int.self, forKey: .outputFPSCap) ?? 0
+        windowTitle = try values.decodeIfPresent(String.self, forKey: .windowTitle) ?? ""
+        windowBundleID = try values.decodeIfPresent(String.self, forKey: .windowBundleID) ?? ""
+        regionDisplayName = try values.decodeIfPresent(String.self, forKey: .regionDisplayName) ?? ""
+        regionRect = try values.decodeIfPresent(CGRect.self, forKey: .regionRect)
     }
 }
 
@@ -117,6 +148,13 @@ final class DisplayBridgeController:
     @Published private(set) var activeDisplayLogicalWidth = 0
     @Published private(set) var activeDisplayLogicalHeight = 0
     @Published private(set) var activeDisplayModeRefreshRate = 0.0
+    @Published private(set) var availableWindows: [CaptureWindowChoice] = []
+    @Published private(set) var availableDisplays: [CaptureDisplayChoice] = []
+    @Published private(set) var selectedWindowID: CGWindowID?
+    @Published private(set) var selectedDisplayID: CGDirectDisplayID?
+    @Published private(set) var isRefreshingSources = false
+    @Published private(set) var isSelectingRegion = false
+    @Published var captureError: String?
 
     var isActiveModeDifferentFromRequested: Bool {
         guard isRunning,
@@ -156,6 +194,19 @@ final class DisplayBridgeController:
     private var previewRenderer: DisplayStreamRenderer?
     private var previewWindow: NSWindow?
 
+    private var externalCapture: ExternalCaptureSession?
+    private var externalPreviewCapture: ExternalCaptureSession?
+    private let externalPreviewView = SurfacePreviewView()
+    private let regionSelector = RegionSelectionCoordinator()
+    private var externalFilter: SCContentFilter?
+    private var externalSourceRect: CGRect?
+    private var externalCaptureWidth = 0
+    private var externalCaptureHeight = 0
+
+    // Prevent an asynchronous start from completing after Stop was pressed.
+    private var captureGeneration = 0
+    private var lastPublishedUptime: TimeInterval = 0
+
     override init() {
         super.init()
         restoreProfiles()
@@ -168,6 +219,7 @@ final class DisplayBridgeController:
               let profile = profiles.first(where: { $0.id == id }) else { return }
         selectedProfileID = id
         draftSettings = profile.settings
+        matchSavedSourceSelections()
         persistProfiles()
     }
 
@@ -198,6 +250,7 @@ final class DisplayBridgeController:
         guard let first = profiles.first else { return }
         selectedProfileID = first.id
         draftSettings = first.settings
+        matchSavedSourceSelections()
         persistProfiles()
     }
 
@@ -236,11 +289,131 @@ final class DisplayBridgeController:
         }
     }
 
+    // MARK: - Source discovery and selection
+
+    func refreshAvailableSources() {
+        guard !isRefreshingSources else { return }
+        isRefreshingSources = true
+        captureError = nil
+
+        Task {
+            defer { isRefreshingSources = false }
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(
+                    false, onScreenWindowsOnly: false
+                )
+
+                let ownBundleID = Bundle.main.bundleIdentifier ?? ""
+                availableWindows = content.windows.compactMap { window in
+                    let title = (window.title ?? "").trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+                    let app = window.owningApplication
+                    let bundleID = app?.bundleIdentifier ?? ""
+                    guard !title.isEmpty,
+                          window.frame.width >= 64,
+                          window.frame.height >= 64,
+                          bundleID != ownBundleID
+                    else { return nil }
+
+                    return CaptureWindowChoice(
+                        id: window.windowID,
+                        title: title,
+                        applicationName: app?.applicationName ?? "Unknown App",
+                        bundleIdentifier: bundleID
+                    )
+                }
+                .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+
+                availableDisplays = content.displays.map { display in
+                    let screen = NSScreen.screens.first(where: {
+                        ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?
+                            .uint32Value == display.displayID
+                    })
+                    return CaptureDisplayChoice(
+                        id: display.displayID,
+                        name: screen?.localizedName ?? "Display \(display.displayID)",
+                        width: display.width,
+                        height: display.height
+                    )
+                }
+
+                matchSavedSourceSelections()
+            } catch {
+                captureError = "Cannot list capture sources: \(error.localizedDescription). Check Screen Recording permissions."
+            }
+        }
+    }
+
+    private func matchSavedSourceSelections() {
+        selectedWindowID = availableWindows.first(where: {
+            $0.title == draftSettings.windowTitle &&
+            $0.bundleIdentifier == draftSettings.windowBundleID
+        })?.id
+
+        selectedDisplayID = availableDisplays.first(where: {
+            $0.name == draftSettings.regionDisplayName
+        })?.id ?? availableDisplays.first?.id
+    }
+
+    func selectWindow(_ id: CGWindowID) {
+        guard !isRunning,
+              let selected = availableWindows.first(where: { $0.id == id })
+        else { return }
+        selectedWindowID = id
+        draftSettings.windowTitle = selected.title
+        draftSettings.windowBundleID = selected.bundleIdentifier
+    }
+
+    func selectRegionDisplay(_ id: CGDirectDisplayID) {
+        guard !isRunning,
+              let selected = availableDisplays.first(where: { $0.id == id })
+        else { return }
+        if selectedDisplayID != id {
+            draftSettings.regionRect = nil
+        }
+        selectedDisplayID = id
+        draftSettings.regionDisplayName = selected.name
+    }
+
+    func selectRegionWithMouse() {
+        guard !isRunning, !isSelectingRegion,
+              let id = selectedDisplayID,
+              let screen = NSScreen.screens.first(where: {
+                  ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?
+                      .uint32Value == id
+              })
+        else {
+            captureError = "Select an available monitor before choosing a region."
+            return
+        }
+
+        isSelectingRegion = true
+        regionSelector.select(on: screen) { [weak self] rect in
+            guard let self else { return }
+            self.isSelectingRegion = false
+            guard let rect else { return } // Escape / too-small selection
+            self.draftSettings.regionRect = rect
+            self.captureError = nil
+        }
+    }
+
+    var regionSummary: String {
+        guard let rect = draftSettings.regionRect else {
+            return "No region selected"
+        }
+        return "\(Int(rect.width)) × \(Int(rect.height)) points at " +
+            "(\(Int(rect.minX)), \(Int(rect.minY)))"
+    }
+
     // MARK: - Start and Stop
 
     func start() {
         guard !isRunning else { return }
 
+        captureError = nil
+        captureGeneration += 1
+        lastPublishedUptime = 0
         frameCounter.reset()
         captureUpdatesPerSecond = 0
         capturedUpdatesTotal = 0
@@ -256,6 +429,15 @@ final class DisplayBridgeController:
         // while running so streams and display geometry stay in sync.
         let settings = draftSettings
         let resolution = settings.resolution
+
+        if settings.sourceMode != .virtualDisplay {
+            isRunning = true
+            publisher.start(name: settings.resolvedSyphonName)
+            startStatisticsTimer()
+            let generation = captureGeneration
+            Task { await startExternalCapture(generation: generation) }
+            return
+        }
 
         // For large output sizes, create a Retina virtual monitor:
         // maxWidth/maxHeight describe the physical framebuffer and
@@ -316,6 +498,9 @@ final class DisplayBridgeController:
     func stop() {
         guard isRunning else { return }
         isRunning = false
+        captureGeneration += 1
+        regionSelector.cancel()
+        isSelectingRegion = false
 
         stopCapture()
         virtualDisplay?.stop()
@@ -470,16 +655,8 @@ final class DisplayBridgeController:
             backend: .cgDisplayStream,
             showCursor: draftSettings.showCursorInSyphon
         )
-        let syphonPublisher = publisher
-        let counter = frameCounter
-
-        renderer.onFrameAvailable = { [weak syphonPublisher] surface in
-            if syphonPublisher?.publish(surface: surface) == true {
-                counter.record(
-                    width: IOSurfaceGetWidth(surface),
-                    height: IOSurfaceGetHeight(surface)
-                )
-            }
+        renderer.onFrameAvailable = { [weak self] surface in
+            self?.publishFrame(surface)
         }
 
         displayRenderer = renderer
@@ -502,6 +679,15 @@ final class DisplayBridgeController:
         displayRenderer?.onFrameAvailable = nil
         displayRenderer?.stopStream()
         displayRenderer = nil
+        externalCapture?.stop()
+        externalCapture = nil
+        externalPreviewCapture?.stop()
+        externalPreviewCapture = nil
+        externalFilter = nil
+        externalPreviewView.clear()
+        externalSourceRect = nil
+        externalCaptureWidth = 0
+        externalCaptureHeight = 0
         captureConfigured = false
     }
 
@@ -539,9 +725,165 @@ final class DisplayBridgeController:
         statisticsTimer = nil
     }
 
+    // MARK: - External window / region capture
+
+    private func startExternalCapture(generation: Int) async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: false
+            )
+            guard generation == captureGeneration, isRunning else { return }
+
+            let settings = draftSettings
+            let filter: SCContentFilter
+            let width: Int
+            let height: Int
+            var sourceRect: CGRect?
+
+            switch settings.sourceMode {
+            case .virtualDisplay:
+                return
+
+            case .window:
+                guard let window = content.windows.first(where: {
+                    $0.windowID == selectedWindowID &&
+                    $0.title == settings.windowTitle
+                }) ?? content.windows.first(where: {
+                    $0.title == settings.windowTitle &&
+                    ($0.owningApplication?.bundleIdentifier ?? "") == settings.windowBundleID
+                }) else {
+                    throw CaptureStartError.sourceNotFound(
+                        "The saved window is no longer available. Refresh and select it again."
+                    )
+                }
+
+                filter = SCContentFilter(desktopIndependentWindow: window)
+                let scale = CGFloat(filter.pointPixelScale)
+                width = max(2, Int((filter.contentRect.width * scale).rounded()))
+                height = max(2, Int((filter.contentRect.height * scale).rounded()))
+
+            case .region:
+                guard let choice = availableDisplays.first(where: {
+                    $0.id == selectedDisplayID
+                }) ?? availableDisplays.first(where: {
+                    $0.name == settings.regionDisplayName
+                }),
+                let display = content.displays.first(where: {
+                    $0.displayID == choice.id
+                }),
+                let rect = settings.regionRect,
+                rect.width >= 16, rect.height >= 16 else {
+                    throw CaptureStartError.sourceNotFound(
+                        "Choose a display and drag a screen region first."
+                    )
+                }
+
+                filter = SCContentFilter(
+                    display: display,
+                    excludingApplications: [],
+                    exceptingWindows: []
+                )
+
+                // sourceRect is relative to the selected display in
+                // top-left-origin screen points, not global Mac coordinates.
+                let screen = NSScreen.screens.first(where: {
+                    ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?
+                        .uint32Value == display.displayID
+                })
+                let pointWidth = screen?.frame.width ?? CGFloat(display.width)
+                let pointHeight = screen?.frame.height ?? CGFloat(display.height)
+                let clipped = rect.intersection(
+                    CGRect(x: 0, y: 0, width: pointWidth, height: pointHeight)
+                )
+                guard clipped.width >= 16, clipped.height >= 16 else {
+                    throw CaptureStartError.sourceNotFound(
+                        "The saved region no longer fits this display. Select it again."
+                    )
+                }
+
+                let scaleX = CGFloat(display.width) / pointWidth
+                let scaleY = CGFloat(display.height) / pointHeight
+                sourceRect = clipped
+                width = max(2, Int((clipped.width * scaleX).rounded()))
+                height = max(2, Int((clipped.height * scaleY).rounded()))
+            }
+
+            externalFilter = filter
+            externalSourceRect = sourceRect
+            externalCaptureWidth = width
+            externalCaptureHeight = height
+
+            let session = ExternalCaptureSession()
+            externalCapture = session
+            try await session.start(
+                filter: filter,
+                width: width,
+                height: height,
+                sourceRect: sourceRect,
+                showsCursor: settings.showCursorInSyphon,
+                fpsCap: settings.outputFPSCap,
+                onFrame: { [weak self] surface in
+                    self?.publishFrame(surface)
+                },
+                onError: { [weak self] message in
+                    guard let self, self.isRunning else { return }
+                    self.stop()
+                    self.captureError = "Capture stopped: \(message)"
+                }
+            )
+            guard generation == captureGeneration, isRunning else {
+                session.stop()
+                return
+            }
+            captureConfigured = true
+            print("[Bridge] External \(settings.sourceMode.rawValue) started: " +
+                  "\(width)x\(height), FPS cap \(settings.outputFPSCap)")
+        } catch {
+            guard generation == captureGeneration else { return }
+            stop()
+            captureError = "Capture couldn't start: \(error.localizedDescription)"
+            print("[Bridge] \(captureError ?? "")")
+        }
+    }
+
+    private enum CaptureStartError: LocalizedError {
+        case sourceNotFound(String)
+        var errorDescription: String? {
+            switch self {
+            case .sourceNotFound(let message): return message
+            }
+        }
+    }
+
+    private func publishFrame(_ surface: IOSurface) {
+        guard isRunning else { return }
+        let cap = draftSettings.outputFPSCap
+        let now = ProcessInfo.processInfo.systemUptime
+        if cap > 0,
+           lastPublishedUptime > 0,
+           now - lastPublishedUptime < (1.0 / Double(cap) - 0.001) {
+            return
+        }
+        guard publisher.publish(surface: surface) else { return }
+
+        lastPublishedUptime = now
+        frameCounter.record(
+            width: IOSurfaceGetWidth(surface),
+            height: IOSurfaceGetHeight(surface)
+        )
+        if draftSettings.sourceMode != .virtualDisplay &&
+           draftSettings.showCursorInSyphon {
+            externalPreviewView.show(surface: surface)
+        }
+    }
+
     // MARK: - Preview
 
     func showPreview() {
+        if draftSettings.sourceMode != .virtualDisplay {
+            showExternalPreview()
+            return
+        }
         guard captureConfigured,
               let outputRenderer = displayRenderer,
               let display = virtualDisplay,
@@ -607,6 +949,86 @@ final class DisplayBridgeController:
         isPreviewVisible = true
     }
 
+    private func showExternalPreview() {
+        guard captureConfigured,
+              let filter = externalFilter else { return }
+
+        if previewWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(
+                    x: 0, y: 0, width: 960, height: 540
+                ),
+                styleMask: [
+                    .titled, .closable, .miniaturizable, .resizable
+                ],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Capture Preview"
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            window.center()
+            previewWindow = window
+        }
+
+        guard let window = previewWindow else { return }
+        if externalCaptureHeight > 0 {
+            window.contentAspectRatio = NSSize(
+                width: externalCaptureWidth,
+                height: externalCaptureHeight
+            )
+        }
+
+        window.contentView = externalPreviewView
+        updatePreviewWindowLevel()
+
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        isPreviewVisible = true
+
+        // The main output stream hides the pointer if the user disabled it.
+        // A temporary preview-only stream makes the pointer visible without
+        // modifying what the Syphon receiver sees.
+        if !draftSettings.showCursorInSyphon,
+           externalPreviewCapture == nil {
+            let session = ExternalCaptureSession()
+            externalPreviewCapture = session
+            let width = externalCaptureWidth
+            let height = externalCaptureHeight
+            let sourceRect = externalSourceRect
+            let generation = captureGeneration
+            Task {
+                do {
+                    try await session.start(
+                        filter: filter,
+                        width: width,
+                        height: height,
+                        sourceRect: sourceRect,
+                        showsCursor: true,
+                        fpsCap: draftSettings.outputFPSCap,
+                        onFrame: { [weak self] surface in
+                            self?.externalPreviewView.show(surface: surface)
+                        },
+                        onError: { [weak self] message in
+                            self?.captureError = "Preview stopped: \(message)"
+                        }
+                    )
+                    if generation != captureGeneration ||
+                       !isPreviewVisible {
+                        session.stop()
+                    }
+                } catch {
+                    guard generation == captureGeneration else { return }
+                    captureError = "Preview could not start: \(error.localizedDescription)"
+                    externalPreviewCapture = nil
+                }
+            }
+        }
+    }
+
     func hidePreview() {
         if let window = previewWindow {
             window.contentView = NSView()
@@ -614,6 +1036,9 @@ final class DisplayBridgeController:
         }
         previewRenderer?.stopStream()
         previewRenderer = nil
+        externalPreviewCapture?.stop()
+        externalPreviewCapture = nil
+        externalPreviewView.clear()
         isPreviewVisible = false
     }
 
@@ -628,6 +1053,9 @@ final class DisplayBridgeController:
         window.contentView = NSView()
         previewRenderer?.stopStream()
         previewRenderer = nil
+        externalPreviewCapture?.stop()
+        externalPreviewCapture = nil
+        externalPreviewView.clear()
         isPreviewVisible = false
     }
 }
