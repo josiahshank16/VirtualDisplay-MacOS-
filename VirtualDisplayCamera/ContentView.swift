@@ -5,10 +5,20 @@ struct ContentView: View {
     @State private var newProfileName = ""
     @State private var showingNewProfileAlert = false
     @State private var showingDeleteProfileAlert = false
+    @State private var showDiagnostics = false
 
     private var selectedProfileName: String {
         controller.profiles.first(where: { $0.id == controller.selectedProfileID })?.name
             ?? "Choose Profile"
+    }
+
+    private func diagnosticRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).foregroundStyle(.secondary)
+            Spacer()
+            Text(value).monospacedDigit()
+        }
+        .font(.caption)
     }
 
     var body: some View {
@@ -97,6 +107,69 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                GroupBox("Virtual Display") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Label(
+                                controller.displayConnected
+                                    ? "Display Connected"
+                                    : (controller.isDisplayRequested
+                                       ? "Connecting Display…" : "Display Disconnected"),
+                                systemImage: controller.displayConnected
+                                    ? "checkmark.circle.fill" : "display"
+                            )
+                            .foregroundStyle(
+                                controller.displayConnected ? .green : .secondary
+                            )
+                            Spacer()
+                        }
+
+                        HStack(spacing: 8) {
+                            Button("Connect Display") {
+                                controller.connectDisplay()
+                            }
+                            .disabled(controller.isDisplayRequested)
+
+                            Button("Disconnect Display") {
+                                controller.disconnectDisplay()
+                            }
+                            .disabled(!controller.isDisplayRequested)
+
+                            Spacer()
+                        }
+
+                        Picker(
+                            "Display resolution",
+                            selection: $controller.draftSettings.resolution
+                        ) {
+                            ForEach(DisplayResolution.allCases) { resolution in
+                                Text(resolution.label).tag(resolution)
+                            }
+                        }
+                        .disabled(controller.isDisplayRequested)
+
+                        Text(
+                            "The virtual monitor stays connected when the " +
+                            "camera feed stops. Connect it first if you plan " +
+                            "to capture a window or region on that monitor."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        if controller.isDisplayRequested &&
+                           controller.isActiveModeDifferentFromRequested {
+                            Label(
+                                "This display was connected at a different resolution. " +
+                                "Reconnect to apply your new choice.",
+                                systemImage: "info.circle"
+                            )
+                            .font(.caption)
+                        }
+                    }
+                    .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 GroupBox("Capture Source") {
                     VStack(alignment: .leading, spacing: 10) {
                         Picker("Source", selection: $controller.draftSettings.sourceMode) {
@@ -179,9 +252,10 @@ struct ContentView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Text(
-                                "Draw a rectangle directly on the monitor. " +
-                                "Press Escape to cancel. The region captures " +
-                                "the pixels beneath it, including overlapping windows."
+                                "Select a region on the chosen monitor. For a " +
+                                "virtual display, a mirrored selection window " +
+                                "opens on your physical monitor. Press Escape " +
+                                "to cancel."
                             )
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -203,38 +277,30 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                GroupBox("Live Capture") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Label(
-                                controller.captureConfigured
-                                    ? "Capture Active"
-                                    : (controller.isRunning ? "Starting Capture…" : "Capture Stopped"),
-                                systemImage: controller.captureConfigured
-                                    ? "checkmark.circle.fill" : "circle.dashed"
-                            )
-                            .foregroundStyle(
-                                controller.captureConfigured ? .green : .secondary
-                            )
-                            Spacer()
-                            if controller.draftSettings.sourceMode == .virtualDisplay {
-                                Text(
-                                    "\(controller.draftSettings.resolution.label) @ " +
-                                    "\(controller.draftSettings.resolution.refreshRate) Hz"
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            }
-                        }
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(
+                            controller.captureConfigured
+                                ? "Syphon Camera Active"
+                                : (controller.isRunning
+                                   ? "Starting Camera…" : "Camera Stopped"),
+                            systemImage: controller.captureConfigured
+                                ? "checkmark.circle.fill" : "video"
+                        )
+                        .foregroundStyle(
+                            controller.captureConfigured ? .green : .secondary
+                        )
 
-                        // Preview now lives beside Start/Stop.
                         HStack(spacing: 8) {
-                            Button("Start Capture") { controller.start() }
-                                .disabled(controller.isRunning)
+                            Button("Start Camera") {
+                                controller.start()
+                            }
+                            .disabled(controller.isRunning)
 
-                            Button("Stop Capture") { controller.stop() }
-                                .disabled(!controller.isRunning)
+                            Button("Stop Camera") {
+                                controller.stop()
+                            }
+                            .disabled(!controller.isRunning)
 
                             Button {
                                 if controller.isPreviewVisible {
@@ -252,7 +318,9 @@ struct ContentView: View {
                             }
                             .disabled(
                                 !controller.captureConfigured &&
-                                !controller.isPreviewVisible
+                                !controller.isPreviewVisible &&
+                                !(controller.draftSettings.sourceMode == .virtualDisplay &&
+                                  controller.displayConnected)
                             )
                         }
 
@@ -261,146 +329,79 @@ struct ContentView: View {
                             isOn: $controller.draftSettings.floatingPreview
                         )
 
-                        Divider()
+                        if showDiagnostics {
+                            Divider()
 
-                        Label(
-                            controller.captureConfigured
-                                ? "Capture Configured" : "Capture Inactive",
-                            systemImage: "video.fill"
-                        )
-                        .foregroundStyle(
-                            controller.captureConfigured ? .green : .secondary
-                        )
-
-                        if controller.draftSettings.sourceMode == .virtualDisplay {
-                        HStack {
-                            Text("Requested display")
-                            Spacer()
-                            Text(controller.draftSettings.resolution.label)
-                                .monospacedDigit()
-                        }
-                        HStack {
-                            Text("Desktop coordinates (points)")
-                            Spacer()
-                            if controller.activeDisplayLogicalWidth > 0 &&
-                               controller.activeDisplayLogicalHeight > 0 {
-                                Text(
-                                    "\(controller.activeDisplayLogicalWidth) × " +
-                                    "\(controller.activeDisplayLogicalHeight)"
+                            if controller.draftSettings.sourceMode == .virtualDisplay {
+                                diagnosticRow(
+                                    "Requested display",
+                                    controller.draftSettings.resolution.label
                                 )
-                                .monospacedDigit()
-                            } else {
-                                Text("Waiting for mode")
-                                    .foregroundStyle(.secondary)
+                                diagnosticRow(
+                                    "Desktop points",
+                                    controller.activeDisplayLogicalWidth > 0
+                                    ? "\(controller.activeDisplayLogicalWidth) × \(controller.activeDisplayLogicalHeight)"
+                                    : "—"
+                                )
+                                diagnosticRow(
+                                    "Physical pixels",
+                                    controller.activeDisplayPixelWidth > 0
+                                    ? "\(controller.activeDisplayPixelWidth) × \(controller.activeDisplayPixelHeight)"
+                                    : "—"
+                                )
+                            }
+                            diagnosticRow(
+                                "Syphon frame",
+                                controller.submittedFrameWidth > 0
+                                ? "\(controller.submittedFrameWidth) × \(controller.submittedFrameHeight)"
+                                : "—"
+                            )
+                            diagnosticRow(
+                                "Published / sec",
+                                String(format: "%.1f", controller.captureUpdatesPerSecond)
+                            )
+                            diagnosticRow(
+                                "Total frames",
+                                controller.capturedUpdatesTotal.formatted()
+                            )
+
+                            if controller.isActiveModeDifferentFromRequested &&
+                               controller.draftSettings.sourceMode == .virtualDisplay {
+                                Label(
+                                    "The virtual display mode does not match the requested resolution.",
+                                    systemImage: "exclamationmark.triangle.fill"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                             }
                         }
-
-                        HStack {
-                            Text("Active mode (physical pixels)")
-                            Spacer()
-                            if controller.activeDisplayPixelWidth > 0 &&
-                               controller.activeDisplayPixelHeight > 0 {
-                                Text(
-                                    "\(controller.activeDisplayPixelWidth) × " +
-                                    "\(controller.activeDisplayPixelHeight)"
-                                )
-                                .monospacedDigit()
-                                .fontWeight(.semibold)
-                            } else {
-                                Text("Waiting for mode")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if controller.isActiveModeDifferentFromRequested {
-                            Label(
-                                "macOS activated a different physical resolution. " +
-                                "Check the available modes in Displays settings.",
-                                systemImage: "exclamationmark.triangle.fill"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        }
-
-                        HStack {
-                            Text("Frame submitted to Syphon")
-                            Spacer()
-                            if controller.submittedFrameWidth > 0 &&
-                               controller.submittedFrameHeight > 0 {
-                                Text(
-                                    "\(controller.submittedFrameWidth) × " +
-                                    "\(controller.submittedFrameHeight)"
-                                )
-                                .monospacedDigit()
-                                .fontWeight(.semibold)
-                            } else {
-                                Text("Waiting for frame")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        if controller.submittedFrameWidth > 0 &&
-                           controller.activeDisplayPixelWidth > 0 &&
-                           (controller.submittedFrameWidth != controller.activeDisplayPixelWidth ||
-                            controller.submittedFrameHeight != controller.activeDisplayPixelHeight) {
-                            Label(
-                                "Capture frame dimensions differ from the active " +
-                                "display mode. This points to capture scaling.",
-                                systemImage: "exclamationmark.triangle"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        HStack {
-                            Text("Submitted frames / sec")
-                            Spacer()
-                            Text(
-                                String(
-                                    format: "%.1f",
-                                    controller.captureUpdatesPerSecond
-                                )
-                            )
-                            .monospacedDigit()
-                        }
-
-                        HStack {
-                            Text("Total submitted frames")
-                            Spacer()
-                            Text(controller.capturedUpdatesTotal.formatted())
-                                .monospacedDigit()
-                        }
-                        .foregroundStyle(.secondary)
-
-                        Text(
-                            "Compare requested, active display, and " +
-                            "submitted frame sizes to locate a resolution cap."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     }
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    HStack {
+                        Text("Camera Feed")
+                        Spacer()
+                        Button {
+                            withAnimation {
+                                showDiagnostics.toggle()
+                            }
+                        } label: {
+                            Image(
+                                systemName: showDiagnostics
+                                    ? "chart.bar.fill" : "chart.bar"
+                            )
+                        }
+                        .buttonStyle(.borderless)
+                        .help(showDiagnostics ? "Hide activity details" : "Show activity details")
+                        .accessibilityLabel(
+                            showDiagnostics ? "Hide diagnostics" : "Show diagnostics"
+                        )
+                    }
                 }
 
                 GroupBox("Display and Output Settings") {
                     VStack(alignment: .leading, spacing: 12) {
-                        if controller.draftSettings.sourceMode == .virtualDisplay {
-                            Picker(
-                                "Virtual resolution",
-                                selection: $controller.draftSettings.resolution
-                            ) {
-                                ForEach(DisplayResolution.allCases) { resolution in
-                                    Text(resolution.label).tag(resolution)
-                                }
-                            }
-                        }
-
                         if controller.draftSettings.sourceMode == .virtualDisplay &&
                            controller.draftSettings.resolution == .ultraHD8K {
                             Label(
@@ -455,9 +456,9 @@ struct ContentView: View {
                         }
 
                         Text(
-                            "Source, resolution, FPS cap, cursor and " +
-                            "source-name settings apply at the next capture " +
-                            "start. Save settings through the profile dropdown."
+                            "FPS, cursor and Syphon name changes apply when " +
+                            "you next start the camera. Display resolution " +
+                            "changes require disconnecting the virtual display."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

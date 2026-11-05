@@ -136,6 +136,11 @@ final class DisplayBridgeController:
 
     @Published private(set) var isRunning = false
     @Published private(set) var displayConnected = false
+    @Published private(set) var isDisplayRequested = false
+
+    var activeVirtualDisplayID: CGDirectDisplayID? {
+        virtualDisplay?.displayID
+    }
     @Published private(set) var captureConfigured = false
     @Published private(set) var isPreviewVisible = false
 
@@ -157,7 +162,7 @@ final class DisplayBridgeController:
     @Published var captureError: String?
 
     var isActiveModeDifferentFromRequested: Bool {
-        guard isRunning,
+        guard isDisplayRequested,
               activeDisplayPixelWidth > 0,
               activeDisplayPixelHeight > 0 else { return false }
         return activeDisplayPixelWidth != draftSettings.resolution.width ||
@@ -186,6 +191,7 @@ final class DisplayBridgeController:
 
     // Recreated at Start according to the selected resolution.
     private var virtualDisplay: VirtualDisplay?
+    private var connectedResolution: DisplayResolution?
     private let publisher = SyphonTestPublisher()
     private var displayRenderer: DisplayStreamRenderer?
 
@@ -299,9 +305,25 @@ final class DisplayBridgeController:
         Task {
             defer { isRefreshingSources = false }
             do {
+                // Only list visible app windows. Desktop elements, background
+                // services and off-screen auxiliary windows are not useful.
                 let content = try await SCShareableContent.excludingDesktopWindows(
-                    false, onScreenWindowsOnly: false
+                    true, onScreenWindowsOnly: true
                 )
+
+                // The window server's layer 0 identifies normal application
+                // windows. Filter out status panels and backstop helpers.
+                let rawWindowInfo = CGWindowListCopyWindowInfo(
+                    [.optionOnScreenOnly, .excludeDesktopElements],
+                    kCGNullWindowID
+                ) as? [[String: Any]] ?? []
+                let normalWindowIDs = Set(rawWindowInfo.compactMap { entry -> CGWindowID? in
+                    guard let layer = (entry[kCGWindowLayer as String] as? NSNumber)?.intValue,
+                          layer == 0,
+                          let id = (entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value
+                    else { return nil }
+                    return id
+                })
 
                 let ownBundleID = Bundle.main.bundleIdentifier ?? ""
                 availableWindows = content.windows.compactMap { window in
@@ -310,10 +332,21 @@ final class DisplayBridgeController:
                     )
                     let app = window.owningApplication
                     let bundleID = app?.bundleIdentifier ?? ""
+                    let lowerTitle = title.lowercased()
+                    let lowerApp = (app?.applicationName ?? "").lowercased()
                     guard !title.isEmpty,
+                          window.isOnScreen,
                           window.frame.width >= 64,
                           window.frame.height >= 64,
-                          bundleID != ownBundleID
+                          !bundleID.isEmpty,
+                          bundleID != ownBundleID,
+                          normalWindowIDs.contains(window.windowID),
+                          !lowerTitle.contains("display backstop"),
+                          !lowerTitle.contains("underbelly"),
+                          !lowerApp.contains("display backstop"),
+                          !lowerApp.contains("underbelly"),
+                          bundleID != "com.apple.dock",
+                          bundleID != "com.apple.WindowServer"
                     else { return nil }
 
                     return CaptureWindowChoice(
@@ -389,7 +422,11 @@ final class DisplayBridgeController:
         }
 
         isSelectingRegion = true
-        regionSelector.select(on: screen) { [weak self] rect in
+        regionSelector.select(
+            on: screen,
+            mirrorVirtualDisplay: id == virtualDisplay?.displayID,
+            displayID: id
+        ) { [weak self] rect in
             guard let self else { return }
             self.isSelectingRegion = false
             guard let rect else { return } // Escape / too-small selection
@@ -409,38 +446,13 @@ final class DisplayBridgeController:
             "(\(Int(rect.minX)), \(Int(rect.minY)))"
     }
 
-    // MARK: - Start and Stop
+    // MARK: - Independent display and camera lifecycle
 
-    func start() {
-        guard !isRunning else { return }
-
+    func connectDisplay() {
+        guard virtualDisplay == nil else { return }
         captureError = nil
-        captureGeneration += 1
-        lastPublishedUptime = 0
-        frameCounter.reset()
-        captureUpdatesPerSecond = 0
-        capturedUpdatesTotal = 0
-        submittedFrameWidth = 0
-        submittedFrameHeight = 0
-        activeDisplayPixelWidth = 0
-        activeDisplayPixelHeight = 0
-        activeDisplayLogicalWidth = 0
-        activeDisplayLogicalHeight = 0
-        activeDisplayModeRefreshRate = 0
-
-        // Capture all settings at Start. The settings editor is disabled
-        // while running so streams and display geometry stay in sync.
-        let settings = draftSettings
-        let resolution = settings.resolution
-
-        if settings.sourceMode != .virtualDisplay {
-            isRunning = true
-            publisher.start(name: settings.resolvedSyphonName)
-            startStatisticsTimer()
-            let generation = captureGeneration
-            Task { await startExternalCapture(generation: generation) }
-            return
-        }
+        let resolution = draftSettings.resolution
+        connectedResolution = resolution
 
         // For large output sizes, create a Retina virtual monitor:
         // maxWidth/maxHeight describe the physical framebuffer and
@@ -491,36 +503,85 @@ final class DisplayBridgeController:
         display.delegate = self
         virtualDisplay = display
 
-        isRunning = true
-        publisher.start(name: settings.resolvedSyphonName)
-        startStatisticsTimer()
+        isDisplayRequested = true
         display.start()
-        print("[Bridge] Starting virtual display at \(resolution.label)")
+        print("[Bridge] Connecting virtual display at \(resolution.label)")
+    }
+
+    func disconnectDisplay() {
+        guard virtualDisplay != nil else { return }
+
+        // This is intentionally independent of camera capture. Disconnection
+        // stops an active camera feed to avoid using a removed source.
+        if isRunning { stop() }
+
+        regionSelector.cancel()
+        isSelectingRegion = false
+        if isPreviewVisible { hidePreview() }
+        virtualDisplay?.stop()
+        virtualDisplay = nil
+        connectedResolution = nil
+        isDisplayRequested = false
+        displayConnected = false
+
+        activeDisplayPixelWidth = 0
+        activeDisplayPixelHeight = 0
+        activeDisplayLogicalWidth = 0
+        activeDisplayLogicalHeight = 0
+        activeDisplayModeRefreshRate = 0
+        print("[Bridge] Virtual display disconnected")
+        refreshAvailableSources()
+    }
+
+    // Start/Stop control the Syphon CAMERA only. They never create or
+    // remove a virtual monitor.
+    func start() {
+        guard !isRunning else { return }
+        captureError = nil
+
+        if draftSettings.sourceMode == .virtualDisplay {
+            guard displayConnected, virtualDisplay != nil else {
+                captureError = "Connect the virtual display first."
+                return
+            }
+            guard connectedResolution == draftSettings.resolution else {
+                captureError = "Display resolution changed. Disconnect and reconnect the display to apply it."
+                return
+            }
+        }
+
+        captureGeneration += 1
+        lastPublishedUptime = 0
+        frameCounter.reset()
+        captureUpdatesPerSecond = 0
+        capturedUpdatesTotal = 0
+        submittedFrameWidth = 0
+        submittedFrameHeight = 0
+
+        isRunning = true
+        publisher.start(name: draftSettings.resolvedSyphonName)
+        startStatisticsTimer()
+
+        if draftSettings.sourceMode == .virtualDisplay {
+            startCapture()
+        } else {
+            let generation = captureGeneration
+            Task { await startExternalCapture(generation: generation) }
+        }
+        print("[Bridge] Camera feed starting")
     }
 
     func stop() {
         guard isRunning else { return }
         isRunning = false
         captureGeneration += 1
-        regionSelector.cancel()
-        isSelectingRegion = false
-
         stopCapture()
-        virtualDisplay?.stop()
-        virtualDisplay = nil
         publisher.stop()
         stopStatisticsTimer()
-
-        displayConnected = false
         captureUpdatesPerSecond = 0
         submittedFrameWidth = 0
         submittedFrameHeight = 0
-        activeDisplayPixelWidth = 0
-        activeDisplayPixelHeight = 0
-        activeDisplayLogicalWidth = 0
-        activeDisplayLogicalHeight = 0
-        activeDisplayModeRefreshRate = 0
-        print("[Bridge] Virtual display stopped")
+        print("[Bridge] Camera feed stopped; virtual display retained")
     }
 
     // MARK: - Display Events
@@ -532,7 +593,9 @@ final class DisplayBridgeController:
         updateActualDisplayMode(displayID)
         logAvailableDisplayModes(displayID)
         displayConnected = true
-        startCapture()
+        // ScreenCaptureKit needs to re-enumerate after the virtual monitor
+        // appears; capture is NOT started by this callback.
+        refreshAvailableSources()
     }
 
     func virtualDisplay(
@@ -733,7 +796,7 @@ final class DisplayBridgeController:
     private func startExternalCapture(generation: Int) async {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(
-                false, onScreenWindowsOnly: false
+                true, onScreenWindowsOnly: false
             )
             guard generation == captureGeneration, isRunning else { return }
 
@@ -762,8 +825,8 @@ final class DisplayBridgeController:
 
                 filter = SCContentFilter(desktopIndependentWindow: window)
                 let scale = CGFloat(filter.pointPixelScale)
-                width = max(2, Int((filter.contentRect.width * scale).rounded()))
-                height = max(2, Int((filter.contentRect.height * scale).rounded()))
+                width = max(2, Int((window.frame.width * scale).rounded()))
+                height = max(2, Int((window.frame.height * scale).rounded()))
 
             case .region:
                 guard let choice = availableDisplays.first(where: {
@@ -825,6 +888,7 @@ final class DisplayBridgeController:
                 sourceRect: sourceRect,
                 showsCursor: settings.showCursorInSyphon,
                 fpsCap: settings.outputFPSCap,
+                windowCapture: settings.sourceMode == .window,
                 onFrame: { [weak self] surface in
                     self?.publishFrame(surface)
                 },
@@ -887,12 +951,11 @@ final class DisplayBridgeController:
             showExternalPreview()
             return
         }
-        guard captureConfigured,
-              let outputRenderer = displayRenderer,
+        guard displayConnected,
               let display = virtualDisplay,
               let displayID = display.displayID
         else {
-            print("[Preview] No active display")
+            print("[Preview] Connect the virtual display first")
             return
         }
 
@@ -920,7 +983,9 @@ final class DisplayBridgeController:
         // When the feed includes the cursor, reuse the existing capture.
         // When the feed hides the cursor, create a preview-only stream
         // with the cursor enabled (never published to Syphon).
-        if draftSettings.showCursorInSyphon {
+        if isRunning, captureConfigured,
+           draftSettings.showCursorInSyphon,
+           let outputRenderer = displayRenderer {
             previewRenderer?.stopStream()
             previewRenderer = nil
             window.contentView = outputRenderer
@@ -1012,6 +1077,7 @@ final class DisplayBridgeController:
                         sourceRect: sourceRect,
                         showsCursor: true,
                         fpsCap: draftSettings.outputFPSCap,
+                        windowCapture: draftSettings.sourceMode == .window,
                         onFrame: { [weak self] surface in
                             self?.externalPreviewView.show(surface: surface)
                         },

@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ notification: Notification
     ) {
         controller.stop()
+        controller.disconnectDisplay()
     }
 
     // MARK: - Dock Menu

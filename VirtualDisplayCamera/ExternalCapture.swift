@@ -50,6 +50,7 @@ final class ExternalCaptureSession {
         sourceRect: CGRect? = nil,
         showsCursor: Bool,
         fpsCap: Int,
+        windowCapture: Bool = false,
         onFrame: @escaping (IOSurface) -> Void,
         onError: @escaping (String) -> Void
     ) async throws {
@@ -62,6 +63,18 @@ final class ExternalCaptureSession {
         config.showsCursor = showsCursor
         config.capturesAudio = false
         config.queueDepth = 3
+        if windowCapture {
+            // ScreenCaptureKit's default independent-window framing may
+            // include a shadow / padding region or letterbox. Ask it to
+            // capture the actual window bounds into the entire output.
+            config.ignoreShadowsSingleWindow = true
+            config.shouldBeOpaque = true
+            config.scalesToFit = true
+            config.preservesAspectRatio = false
+            config.destinationRect = CGRect(
+                x: 0, y: 0, width: config.width, height: config.height
+            )
+        }
         // The receiver is allowed up to 60fps if no cap is selected.
         config.minimumFrameInterval = CMTime(
             value: 1,
