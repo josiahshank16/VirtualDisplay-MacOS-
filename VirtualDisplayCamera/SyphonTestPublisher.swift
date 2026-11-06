@@ -12,7 +12,7 @@ final class SyphonTestPublisher: NSObject {
     private var device: (any MTLDevice)?
     private var commandQueue: (any MTLCommandQueue)?
 
-    func start() {
+    func start(name: String = "VirtualDisplayCamera") {
         guard server == nil else { return }
 
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -26,7 +26,7 @@ final class SyphonTestPublisher: NSObject {
         self.commandQueue = queue
 
         server = SyphonMetalServer(
-            name: "VirtualDisplayCamera",
+            name: name,
             device: device,
             options: nil
         )
@@ -36,16 +36,17 @@ final class SyphonTestPublisher: NSObject {
               : "Syphon server failed")
     }
 
-    func publish(surface: IOSurface) {
+    @discardableResult
+    func publish(surface: IOSurface) -> Bool {
         guard let server,
               let device,
               let commandQueue
-        else { return }
+        else { return false }
 
         let width = IOSurfaceGetWidth(surface)
         let height = IOSurfaceGetHeight(surface)
 
-        guard width > 0, height > 0 else { return }
+        guard width > 0, height > 0 else { return false }
 
         let descriptor =
             MTLTextureDescriptor.texture2DDescriptor(
@@ -65,7 +66,7 @@ final class SyphonTestPublisher: NSObject {
         ),
         let buffer = commandQueue.makeCommandBuffer()
         else {
-            return
+            return false
         }
 
         // Keep the source frame available until
@@ -89,6 +90,7 @@ final class SyphonTestPublisher: NSObject {
         )
 
         buffer.commit()
+        return true
     }
 
     func stop() {

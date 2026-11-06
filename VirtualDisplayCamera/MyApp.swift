@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ notification: Notification
     ) {
         controller.stop()
+        controller.disconnectDisplay()
     }
 
     // MARK: - Dock Menu
@@ -95,8 +96,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             contentRect: NSRect(
                 x: 0,
                 y: 0,
-                width: 420,
-                height: 400
+                width: 520,
+                height: 590
             ),
             styleMask: [
                 .titled,
@@ -115,8 +116,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Allow resizing, but prevent the window
         // from becoming too small to use.
         window.contentMinSize = NSSize(
-            width: 360,
-            height: 280
+            width: 440,
+            height: 400
         )
 
         // Remember the window's position and size.
