@@ -158,6 +158,8 @@ final class DisplayBridgeController:
     @Published private(set) var selectedWindowID: CGWindowID?
     @Published private(set) var selectedDisplayID: CGDirectDisplayID?
     @Published private(set) var isRefreshingSources = false
+    // If screens change during an in-flight enumeration, rerun it once.
+    private var sourceRefreshPending = false
     @Published private(set) var isSelectingRegion = false
     @Published var captureError: String?
 
@@ -298,12 +300,21 @@ final class DisplayBridgeController:
     // MARK: - Source discovery and selection
 
     func refreshAvailableSources() {
-        guard !isRefreshingSources else { return }
+        if isRefreshingSources {
+            sourceRefreshPending = true
+            return
+        }
         isRefreshingSources = true
         captureError = nil
 
         Task {
-            defer { isRefreshingSources = false }
+            defer {
+                isRefreshingSources = false
+                if sourceRefreshPending {
+                    sourceRefreshPending = false
+                    refreshAvailableSources()
+                }
+            }
             do {
                 // Only list visible app windows. Desktop elements, background
                 // services and off-screen auxiliary windows are not useful.
@@ -588,7 +599,9 @@ final class DisplayBridgeController:
     // MARK: - Display Events
 
     func virtualDisplayDidBecomeReady(_ display: VirtualDisplay) {
-        guard isRunning, virtualDisplay === display,
+        // The virtual display must become ready BEFORE camera capture starts.
+        // Do not guard on isRunning; the two lifecycles are independent.
+        guard isDisplayRequested, virtualDisplay === display,
               let displayID = display.displayID else { return }
 
         updateActualDisplayMode(displayID)
@@ -604,7 +617,7 @@ final class DisplayBridgeController:
         didChangeResolution resolution: CGSize,
         scaleFactor: CGFloat
     ) {
-        guard virtualDisplay === display,
+        guard isDisplayRequested, virtualDisplay === display,
               let displayID = display.displayID else { return }
 
         updateActualDisplayMode(displayID)
