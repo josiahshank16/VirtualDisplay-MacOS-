@@ -353,9 +353,9 @@ final class DisplayBridgeController:
                           bundleID != ownBundleID,
                           (normalWindowIDs.isEmpty ||
                            normalWindowIDs.contains(window.windowID)),
-                          !lowerTitle.contains("display backstop"),
+                          !lowerTitle.contains("backstop"),
                           !lowerTitle.contains("underbelly"),
-                          !lowerApp.contains("display backstop"),
+                          !lowerApp.contains("backstop"),
                           !lowerApp.contains("underbelly"),
                           bundleID != "com.apple.dock",
                           bundleID != "com.apple.WindowServer"

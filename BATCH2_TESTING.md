@@ -12,7 +12,7 @@ This is a development test branch. It is not yet merged into `main`.
 ## First verify independent display / camera operation
 
 1. With Source set to **Virtual Display**, choose 1920 × 1080 or 3840 × 2160.
-2. Click **Connect Display**. The status should say **Display Connected**, while **Camera Stopped** remains visible.
+2. Click **Connect Display**. The status should say **Display Connected** even though **Camera Stopped** remains visible. If it stays on Connecting Display, copy the Xcode console.
 3. Click **Show Preview**. You should be able to preview the desktop while the camera is stopped.
 4. Click **Start Camera**. Check that ProPresenter sees the same Syphon source as before.
 5. Click **Stop Camera**. The second monitor should REMAIN in macOS Displays settings.
@@ -22,7 +22,7 @@ This is a development test branch. It is not yet merged into `main`.
 
 1. In Source, select **Application Window**, refresh the dropdown.
 2. Verify desktop Backstop and Underbelly helper windows are absent.
-3. Choose an ordinary visible app window, Start Camera, Show Preview.
+3. Choose an ordinary visible app window, Start Camera, Show Preview. Window lists intentionally omit off-screen/background helpers, so a minimized or completely hidden window may not be offered.
 4. Check there is no extra white / padded band along the bottom.
 5. Move or cover the window and verify the feed remains selected (some minimized or protected windows may not capture).
 
